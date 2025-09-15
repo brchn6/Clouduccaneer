@@ -1,21 +1,22 @@
 # cb/cli.py
 from __future__ import annotations
+import json
 import typer
 from pathlib import Path
 from typing import Optional, Dict, List
 from .utils import load_config
 from . import ytwrap
 from .renamer import plan_renames, apply_changes
-import json
-import sys
 from . import spotwrap
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
+
 @app.command()
 def fetch(url: str,
           dest: Path = typer.Option(None, "--dest", help="Destination directory"),
-          limit_seconds: int = typer.Option(None, "--max-seconds", help="Skip tracks longer than this"),
+          limit_seconds: int = typer.Option(None, "--max-seconds", 
+                                           help="Skip tracks longer than this"),
           dry: bool = typer.Option(False, "--dry", help="Print what would be done")):
     """Download a playlist/track/user/likes/reposts with yt-dlp using sane defaults."""
     cfg = load_config()
@@ -24,17 +25,23 @@ def fetch(url: str,
 
     # When limiting by duration, enumerate track urls first
     if limit_seconds is not None:
-        urls = list(ytwrap.print_lines(["yt-dlp", "--flat-playlist", "--print", "%(url)s", url]))
+        urls = list(ytwrap.print_lines([
+            "yt-dlp", "--flat-playlist", "--print", "%(url)s", url
+        ]))
         dmap = ytwrap.duration_map(urls)
         urls = [u for u in urls if 0 < dmap.get(u, 0) < limit_seconds]
         if dry:
-            for u in urls: print("[DRY] would fetch:", u); return
+            for u in urls:
+                print("[DRY] would fetch:", u)
+            return
         for u in urls:
             ytwrap.fetch(u, str(base / cfg["out_template"]))
     else:
         if dry:
-            print("[DRY] would fetch:", url); return
+            print("[DRY] would fetch:", url)
+            return
         ytwrap.fetch(url, str(base / cfg["out_template"]))
+
 
 @app.command()
 def rename(folder: Path = typer.Argument(..., help="Folder to clean"),
@@ -45,32 +52,48 @@ def rename(folder: Path = typer.Argument(..., help="Folder to clean"),
            undo: Path = typer.Option(Path("undo_cloudbuccaneer.csv"), "--undo")):
     """Clean filenames: strip junk; guess artist/title; keep track # optionally; move covers."""
     cfg = load_config()
-    if ascii_only is None: ascii_only = bool(cfg["rename"].get("ascii", True))
-    if keep_track is None: keep_track = bool(cfg["rename"].get("keep_track", True))
-    changes = plan_renames(folder.expanduser(), ascii_only=ascii_only, keep_track=keep_track)
-    if not changes: print("Nothing to change."); raise typer.Exit(code=0)
-    for old, new in changes: print(f"[{'APPLY' if apply else 'DRY'}] {old} -> {new}")
+    if ascii_only is None:
+        ascii_only = bool(cfg["rename"].get("ascii", True))
+    if keep_track is None:
+        keep_track = bool(cfg["rename"].get("keep_track", True))
+    changes = plan_renames(folder.expanduser(), ascii_only=ascii_only, 
+                          keep_track=keep_track)
+    if not changes:
+        print("Nothing to change.")
+        raise typer.Exit(code=0)
+    for old, new in changes:
+        print(f"[{'APPLY' if apply else 'DRY'}] {old} -> {new}")
     if apply:
-        apply_changes(changes, move_covers=move_covers or bool(cfg["rename"].get("move_covers", False)),
-                      undo_csv=undo.expanduser())
+        apply_changes(
+            changes,
+            move_covers=move_covers or bool(cfg["rename"].get("move_covers", False)),
+            undo_csv=undo.expanduser()
+        )
 
 @app.command()
 def dedupe(root: Path = typer.Argument(..., help="Kill *.1.mp3 style dupes"),
            apply: bool = typer.Option(False, "--apply")):
     """Remove simple duplicate files that end with .1 before the extension."""
     root = root.expanduser()
-    victims = list(p for p in root.rglob("*") if p.is_file() and p.suffix.lower()==".mp3" and p.stem.endswith(".1"))
+    victims = list(p for p in root.rglob("*") 
+                   if p.is_file() and p.suffix.lower() == ".mp3" and 
+                   p.stem.endswith(".1"))
     for v in victims:
         print(f"[{'DELETE' if apply else 'DRY'}] {v}")
-        if apply: v.unlink()
+        if apply:
+            v.unlink()
+
 
 @app.command()
 def search(query: str,
            max: int = typer.Option(20, "--max", help="Max results to take"),
-           kind: str = typer.Option("tracks", "--kind", help="'tracks' (default), 'sets', or 'users'"),
-           cluster: bool = typer.Option(False, "--cluster", help="Group results by uploader"),
+           kind: str = typer.Option("tracks", "--kind", 
+                                   help="'tracks' (default), 'sets', or 'users'"),
+           cluster: bool = typer.Option(False, "--cluster", 
+                                       help="Group results by uploader"),
            dest: Path = typer.Option(None, "--dest", help="Destination directory"),
-           max_seconds: Optional[int] = typer.Option(None, "--max-seconds", help="Skip tracks longer than this"),
+           max_seconds: Optional[int] = typer.Option(None, "--max-seconds", 
+                                                    help="Skip tracks longer than this"),
            dry: bool = typer.Option(False, "--dry", help="Preview without downloading")):
     """
     Search SoundCloud via yt-dlp's scsearch and (optionally) cluster by uploader.
