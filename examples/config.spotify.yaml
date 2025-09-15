@@ -1,0 +1,16 @@
+# Spotify Integration Example Configuration
+
+download_dir: /home/user/Download/soundcloud
+out_template: "%(playlist_title|Unknown Set)s/%(playlist_index|0)02d - %(title)s - %(artist|uploader)s.%(ext)s"
+rename:
+  ascii: true
+  keep_track: true
+  move_covers: true
+
+# New Spotify configuration section
+spotify:
+  download_dir: /home/user/Download/spotify
+  quality: "320k"           # Options: 320k, 256k, 192k, 128k, auto
+  format: "mp3"             # Options: mp3, flac, ogg, opus, m4a, wav
+  lyrics: true              # Download lyrics from Genius/Musixmatch
+  playlist_numbering: true  # Add track numbers for playlists

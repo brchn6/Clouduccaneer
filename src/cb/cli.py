@@ -5,8 +5,9 @@ from pathlib import Path
 from typing import Optional, Dict, List
 from .utils import load_config
 from . import ytwrap
+from . import spotwrap
 
-app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud downloads")
+app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
 @app.command()
 def fetch(url: str,
@@ -192,7 +193,56 @@ def clean(folder: Path = typer.Argument(..., help="Folder to sweep"),
                 removed += 1
             except Exception as e:
                 print("Skip (error):", p, e)
-    print(f"Removed {removed} file(s).")
+@app.command("fetch-spotify")
+def fetch_spotify(url: str,
+                 dest: Path = typer.Option(None, "--dest", help="Destination directory"),
+                 quality: str = typer.Option("320k", "--quality", help="Audio quality (320k, 256k, 192k, 128k)"),
+                 format: str = typer.Option("mp3", "--format", help="Audio format (mp3, flac, ogg, m4a)"),
+                 lyrics: bool = typer.Option(True, "--lyrics/--no-lyrics", help="Download lyrics"),
+                 dry: bool = typer.Option(False, "--dry", help="Print what would be done")):
+    """Download a Spotify track/playlist/album with spotdl."""
+    if not spotwrap.validate_spotify_url(url):
+        print("Error: Invalid Spotify URL"); raise typer.Exit(code=1)
+    
+    cfg = load_config()
+    base = Path(dest or cfg.get("spotify", {}).get("download_dir", "~/Download/spotify")).expanduser()
+    base.mkdir(parents=True, exist_ok=True)
+    
+    url = spotwrap.normalize_spotify_url(url)
+    
+    if dry:
+        print(f"[DRY] would fetch spotify: {url}")
+        print(f"[DRY] destination: {base}")
+        print(f"[DRY] quality: {quality}, format: {format}")
+        return
+    
+    # Use a template that works with spotdl
+    out_template = str(base / "{artist} - {title}.{ext}")
+    spotwrap.fetch(url, out_template, audio_fmt=format, quality=quality, lyrics=lyrics)
+
+@app.command("search-spotify")  
+def search_spotify(query: str,
+                  max: int = typer.Option(20, "--max", help="Max results"),
+                  type_filter: str = typer.Option("track", "--type", help="Search type: track, album, playlist, artist"),
+                  dest: Path = typer.Option(None, "--dest", help="Destination directory"), 
+                  quality: str = typer.Option("320k", "--quality", help="Audio quality"),
+                  format: str = typer.Option("mp3", "--format", help="Audio format"),
+                  dry: bool = typer.Option(False, "--dry", help="Preview without downloading")):
+    """Search and download from Spotify."""
+    cfg = load_config()
+    base = Path(dest or cfg.get("spotify", {}).get("download_dir", "~/Download/spotify")).expanduser()
+    base.mkdir(parents=True, exist_ok=True)
+    
+    # For now, use the query directly with spotdl since it can handle search queries
+    search_query = f"{type_filter}:{query}" if type_filter != "track" else query
+    
+    if dry:
+        print(f"[DRY] would search spotify for: {search_query}")
+        print(f"[DRY] destination: {base}")
+        return
+    
+    out_template = str(base / "{artist} - {title}.{ext}")
+    spotwrap.fetch(search_query, out_template, audio_fmt=format, quality=quality)
 
 if __name__ == "__main__":
     app()
