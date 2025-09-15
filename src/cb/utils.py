@@ -10,7 +10,14 @@ def load_config() -> Dict[str, Any]:
     default = {
         "download_dir": str(Path("~/Download/soundcloud").expanduser()),
         "out_template": "%(playlist_title|Unknown Set)s/%(playlist_index|0)02d - %(title)s - %(artist|uploader)s.%(ext)s",
-        "rename": {"ascii": True, "keep_track": True, "move_covers": True}
+        "rename": {"ascii": True, "keep_track": True, "move_covers": True},
+        "spotify": {
+            "download_dir": str(Path("~/Download/spotify").expanduser()),
+            "quality": "320k",
+            "format": "mp3",
+            "lyrics": True,
+            "playlist_numbering": True
+        }
     }
     if cfg_path.exists():
         with cfg_path.open() as f: user = yaml.safe_load(f) or {}
