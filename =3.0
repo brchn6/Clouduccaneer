@@ -1,0 +1,56 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting pytest
+  Downloading pytest-8.4.2-py3-none-any.whl.metadata
+     - 7.7 kB ? 0:00:00
+Collecting pytest-cov
+  Downloading pytest_cov-7.0.0-py3-none-any.whl.metadata
+     - 31.2 kB 220.1 MB/s 0:00:00
+Collecting pytest-mock
+  Downloading pytest_mock-3.15.0-py3-none-any.whl.metadata
+     - 3.9 kB ? 0:00:00
+Collecting pytest-xdist
+  Downloading pytest_xdist-3.8.0-py3-none-any.whl.metadata
+     - 3.0 kB ? 0:00:00
+Collecting pytest-html
+  Downloading pytest_html-4.1.1-py3-none-any.whl.metadata
+     - 3.9 kB ? 0:00:00
+Collecting iniconfig>=1 (from pytest)
+  Downloading iniconfig-2.1.0-py3-none-any.whl.metadata
+     - 2.7 kB ? 0:00:00
+Requirement already satisfied: packaging>=20 in /usr/lib/python3/dist-packages (from pytest) (24.0)
+Collecting pluggy<2,>=1.5 (from pytest)
+  Downloading pluggy-1.6.0-py3-none-any.whl.metadata
+     - 4.8 kB ? 0:00:00
+Requirement already satisfied: pygments>=2.7.2 in /usr/lib/python3/dist-packages (from pytest) (2.17.2)
+Collecting coverage>=7.10.6 (from coverage[toml]>=7.10.6->pytest-cov)
+  Downloading coverage-7.10.6-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl.metadata
+     - 8.9 kB ? 0:00:00
+Collecting execnet>=2.1 (from pytest-xdist)
+  Downloading execnet-2.1.1-py3-none-any.whl.metadata
+     - 2.9 kB ? 0:00:00
+Requirement already satisfied: jinja2>=3.0.0 in /usr/lib/python3/dist-packages (from pytest-html) (3.1.2)
+Collecting pytest-metadata>=2.0.0 (from pytest-html)
+  Downloading pytest_metadata-3.1.1-py3-none-any.whl.metadata
+     - 8.6 kB ? 0:00:00
+Downloading pytest-8.4.2-py3-none-any.whl
+   - 365.8 kB 106.8 MB/s 0:00:00
+Downloading pytest_cov-7.0.0-py3-none-any.whl
+   - 22.4 kB 152.1 MB/s 0:00:00
+Downloading pytest_mock-3.15.0-py3-none-any.whl
+   - 10.1 kB ? 0:00:00
+Downloading pytest_xdist-3.8.0-py3-none-any.whl
+   - 46.4 kB 203.3 MB/s 0:00:00
+Downloading pytest_html-4.1.1-py3-none-any.whl
+   - 23.5 kB 163.2 MB/s 0:00:00
+Downloading coverage-7.10.6-cp312-cp312-manylinux1_x86_64.manylinux_2_28_x86_64.manylinux_2_5_x86_64.whl
+   - 251.8 kB 197.4 MB/s 0:00:00
+Downloading execnet-2.1.1-py3-none-any.whl
+   - 40.6 kB 178.1 MB/s 0:00:00
+Downloading iniconfig-2.1.0-py3-none-any.whl
+   - 6.0 kB ? 0:00:00
+Downloading pluggy-1.6.0-py3-none-any.whl
+   - 20.5 kB 130.0 MB/s 0:00:00
+Downloading pytest_metadata-3.1.1-py3-none-any.whl
+   - 11.4 kB 56.6 MB/s 0:00:00
+Installing collected packages: pluggy, iniconfig, execnet, coverage, pytest, pytest-xdist, pytest-mock, pytest-metadata, pytest-cov, pytest-html
+Successfully installed coverage-7.10.6 execnet-2.1.1 iniconfig-2.1.0 pluggy-1.6.0 pytest-8.4.2 pytest-cov-7.0.0 pytest-html-4.1.1 pytest-metadata-3.1.1 pytest-mock-3.15.0 pytest-xdist-3.8.0
