@@ -1,0 +1,13 @@
+README.md
+pyproject.toml
+src/cb/__init__.py
+src/cb/cli.py
+src/cb/renamer.py
+src/cb/utils.py
+src/cb/ytwrap.py
+src/cloudbuccaneer.egg-info/PKG-INFO
+src/cloudbuccaneer.egg-info/SOURCES.txt
+src/cloudbuccaneer.egg-info/dependency_links.txt
+src/cloudbuccaneer.egg-info/entry_points.txt
+src/cloudbuccaneer.egg-info/requires.txt
+src/cloudbuccaneer.egg-info/top_level.txt

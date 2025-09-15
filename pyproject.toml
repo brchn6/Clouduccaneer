@@ -1,0 +1,21 @@
+[project]
+name = "cloudbuccaneer"
+version = "0.1.0"
+description = "Fetch + fix SoundCloud downloads: yt-dlp wrapper + smart renamer"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = ["typer>=0.12", "pyyaml>=6.0"]
+
+[project.scripts]
+cb = "cb.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
+include = ["cb*"]
+
+# If you have package data:
+[tool.setuptools.package-data]
+cb = ["data/**/*"]   # only if you moved your data into src/cb/data

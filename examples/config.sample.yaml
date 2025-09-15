@@ -1,0 +1,6 @@
+download_dir: /home/barc/Download/soundcloud
+out_template: "%(playlist_title|Unknown Set)s/%(playlist_index|0)02d - %(title)s - %(artist|uploader)s.%(ext)s"
+rename:
+  ascii: true
+  keep_track: true
+  move_covers: true
