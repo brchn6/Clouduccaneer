@@ -7,7 +7,7 @@ import soundfile as sf
 from pathlib import Path
 from typer.testing import CliRunner
 from cb.cli import app
-from cb.bpm import BPMDetector, find_audio_files, format_bpm_result
+from cb.bpm import BPMDetector, find_audio_files, format_bpm_result, add_bpm_to_filename, add_bpm_to_tags
 
 
 runner = CliRunner()
@@ -191,6 +191,76 @@ class TestFormatBPMResult:
         assert result == "Track: test.mp3 → BPM: Unable to detect"
 
 
+class TestExportFunctions:
+    """Test BPM export functionality."""
+    
+    def test_add_bpm_to_filename(self):
+        """Test adding BPM to filename."""
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            test_audio = create_test_audio(120)
+            sf.write(f.name, test_audio, 22050)
+            original_path = Path(f.name)
+        
+        new_path = None
+        new_path2 = None
+        
+        try:
+            # Test adding BPM to filename
+            new_path = add_bpm_to_filename(original_path, 120.5, backup=True)
+            
+            assert new_path is not None
+            assert "[120 BPM]" in new_path.name  # Rounded to integer
+            assert new_path.exists()
+            assert original_path.exists()  # Original should still exist (backup=True)
+            
+            # Test without backup
+            new_path2 = add_bpm_to_filename(original_path, 120.5, backup=False)
+            assert new_path2 is not None
+            assert not original_path.exists()  # Original should be removed (backup=False)
+            
+        finally:
+            # Clean up
+            for path in [original_path, new_path, new_path2]:
+                if path and path.exists():
+                    path.unlink()
+    
+    def test_add_bpm_to_filename_existing_bpm(self):
+        """Test adding BPM to filename that already has BPM."""
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.close()
+            original_path = Path(f.name)
+            
+            # Rename to have existing BPM
+            bpm_path = original_path.parent / f"{original_path.stem} [120 BPM].wav"
+            original_path.rename(bpm_path)
+        
+        try:
+            # Test updating BPM in filename
+            new_path = add_bpm_to_filename(bpm_path, 140.0, backup=True)
+            
+            assert new_path is not None
+            assert "[140 BPM]" in new_path.name
+            assert "[120 BPM]" not in new_path.name
+            
+        finally:
+            # Clean up
+            for path in [original_path, bpm_path, new_path]:
+                if path and path.exists():
+                    path.unlink()
+    
+    def test_add_bpm_to_tags_unsupported_file(self):
+        """Test adding BPM to tags on unsupported file format."""
+        with tempfile.NamedTemporaryFile(suffix='.txt', delete=False) as f:
+            f.write(b"test content")
+            temp_path = Path(f.name)
+        
+        try:
+            success = add_bpm_to_tags(temp_path, 120.0)
+            assert success == False
+        finally:
+            temp_path.unlink()
+
+
 class TestBPMCLI:
     """Test BPM CLI command."""
     
@@ -287,6 +357,37 @@ class TestBPMCLI:
             assert result.exit_code == 0
         finally:
             temp_path.unlink()
+    
+    def test_bpm_command_export_options(self):
+        """Test BPM command with export options."""
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            test_audio = create_test_audio(120)
+            sf.write(f.name, test_audio, 22050)
+            temp_path = Path(f.name)
+        
+        try:
+            # Test export to filename
+            result = runner.invoke(app, ["bpm", str(temp_path), "--export-filename"])
+            assert result.exit_code == 0
+            assert "Exported to filename:" in result.stdout
+            
+            # Test export flags in help
+            result = runner.invoke(app, ["bpm", "--help"])
+            assert result.exit_code == 0
+            # Remove ANSI codes more thoroughly for testing
+            import re
+            clean_output = re.sub(r'\x1b\[[0-9;]*m', '', result.stdout)
+            assert "export-filename" in clean_output
+            assert "export-tags" in clean_output
+            assert "backup" in clean_output
+            
+        finally:
+            # Clean up any exported files
+            temp_dir = temp_path.parent
+            for file in temp_dir.glob(f"{temp_path.stem}*BPM*"):
+                file.unlink()
+            if temp_path.exists():
+                temp_path.unlink()
 
 
 if __name__ == "__main__":

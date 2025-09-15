@@ -9,7 +9,7 @@ from .renamer import plan_renames, apply_changes
 import json
 import sys
 from . import spotwrap
-from .bpm import BPMDetector, find_audio_files, format_bpm_result
+from .bpm import BPMDetector, find_audio_files, format_bpm_result, add_bpm_to_filename, add_bpm_to_tags
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
@@ -349,7 +349,10 @@ def _create_conversation_summary(conversation_data: List[Dict]) -> str:
 def bpm(target: Path = typer.Argument(..., help="Audio file or directory to analyze"),
         parallel: bool = typer.Option(False, "--parallel", help="Use parallel processing for multiple files"),
         advanced: bool = typer.Option(True, "--advanced/--basic", help="Use advanced multi-method detection"),
-        recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Search subdirectories")):
+        recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Search subdirectories"),
+        export_filename: bool = typer.Option(False, "--export-filename", help="Add BPM to filename (e.g., song [128 BPM].mp3)"),
+        export_tags: bool = typer.Option(False, "--export-tags", help="Add BPM to audio file metadata tags"),
+        backup: bool = typer.Option(True, "--backup/--no-backup", help="Keep original files when exporting to filename")):
     """Analyze audio files and detect their BPM (beats per minute)."""
     target = target.expanduser()
     
@@ -370,6 +373,22 @@ def bpm(target: Path = typer.Argument(..., help="Audio file or directory to anal
         bpm = detector.detect_bpm(target)
         print(format_bpm_result(target, bpm))
         
+        # Export options
+        if bpm is not None:
+            if export_filename:
+                new_path = add_bpm_to_filename(target, bpm, backup=backup)
+                if new_path:
+                    print(f"Exported to filename: {new_path.name}")
+                else:
+                    print("Failed to export to filename")
+            
+            if export_tags:
+                success = add_bpm_to_tags(target, bpm)
+                if success:
+                    print("Added BPM to metadata tags")
+                else:
+                    print("Failed to add BPM to metadata tags")
+        
     elif target.is_dir():
         # Directory processing
         audio_files = find_audio_files(target, recursive=recursive)
@@ -386,15 +405,35 @@ def bpm(target: Path = typer.Argument(..., help="Audio file or directory to anal
         # Detect BPM for all files
         results = detector.detect_bpm_batch(audio_files, parallel=parallel)
         
-        # Display results
+        # Display results and export
         print()
+        exported_filenames = 0
+        exported_tags = 0
+        
         for file_path, bpm in results.items():
             print(format_bpm_result(file_path, bpm))
+            
+            # Export options
+            if bpm is not None:
+                if export_filename:
+                    new_path = add_bpm_to_filename(file_path, bpm, backup=backup)
+                    if new_path:
+                        exported_filenames += 1
+                
+                if export_tags:
+                    success = add_bpm_to_tags(file_path, bpm)
+                    if success:
+                        exported_tags += 1
             
         # Summary
         successful = sum(1 for bpm in results.values() if bpm is not None)
         print(f"\nSummary: {successful}/{len(audio_files)} files analyzed successfully")
         
+        if export_filename:
+            print(f"Exported to filename: {exported_filenames}/{successful} files")
+        if export_tags:
+            print(f"Added to metadata tags: {exported_tags}/{successful} files")
+            
     else:
         print(f"Error: Invalid target type: {target}")
         raise typer.Exit(code=1)

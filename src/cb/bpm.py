@@ -6,6 +6,7 @@ import numpy as np
 from pathlib import Path
 from typing import Optional, Dict, List, Tuple
 import warnings
+import shutil
 
 
 class BPMDetector:
@@ -170,3 +171,119 @@ def format_bpm_result(file_path: Path, bpm: Optional[float]) -> str:
         return f"Track: {file_path.name} → BPM: {bpm:.1f}"
     else:
         return f"Track: {file_path.name} → BPM: Unable to detect"
+
+
+def add_bpm_to_filename(file_path: Path, bpm: float, backup: bool = True) -> Optional[Path]:
+    """Add BPM to filename while preserving the original file.
+    
+    Args:
+        file_path: Path to audio file
+        bpm: Detected BPM
+        backup: Create backup of original file
+        
+    Returns:
+        Path to new file with BPM in name, or None if failed
+    """
+    try:
+        # Create new filename with BPM
+        stem = file_path.stem
+        suffix = file_path.suffix
+        
+        # Remove existing BPM from filename if present
+        import re
+        stem = re.sub(r'\s*\[\d+(\.\d+)?\s*BPM\]', '', stem)
+        
+        new_name = f"{stem} [{bpm:.0f} BPM]{suffix}"
+        new_path = file_path.parent / new_name
+        
+        # Avoid overwriting existing files
+        counter = 1
+        while new_path.exists() and new_path != file_path:
+            new_name = f"{stem} [{bpm:.0f} BPM] ({counter}){suffix}"
+            new_path = file_path.parent / new_name
+            counter += 1
+        
+        if new_path == file_path:
+            return file_path  # Already has correct BPM in filename
+        
+        # Copy file to new location
+        shutil.copy2(file_path, new_path)
+        
+        # Remove original file if backup not requested
+        if not backup:
+            file_path.unlink()
+            
+        return new_path
+        
+    except Exception:
+        return None
+
+
+def add_bpm_to_tags(file_path: Path, bpm: float) -> bool:
+    """Add BPM to audio file metadata tags.
+    
+    Args:
+        file_path: Path to audio file
+        bpm: Detected BPM
+        
+    Returns:
+        True if successful, False otherwise
+    """
+    try:
+        from mutagen.id3 import ID3, TBPM
+        from mutagen.mp4 import MP4
+        from mutagen.flac import FLAC
+        from mutagen.oggvorbis import OggVorbis
+        from mutagen import File
+        
+        # Round BPM to nearest integer for tags
+        bpm_int = int(round(bpm))
+        
+        # Try to load the file and add BPM tag
+        audio_file = File(str(file_path))
+        
+        if audio_file is None:
+            return False
+            
+        # Handle different file formats
+        if hasattr(audio_file, 'tags') and audio_file.tags is not None:
+            if file_path.suffix.lower() == '.mp3':
+                # MP3 with ID3 tags
+                if not isinstance(audio_file.tags, ID3):
+                    audio_file.add_tags()
+                audio_file.tags.add(TBPM(encoding=3, text=str(bpm_int)))
+                
+            elif file_path.suffix.lower() == '.m4a':
+                # MP4/M4A files
+                audio_file.tags['tmpo'] = [bpm_int]
+                
+            elif file_path.suffix.lower() == '.flac':
+                # FLAC files
+                audio_file.tags['BPM'] = str(bpm_int)
+                
+            elif file_path.suffix.lower() in ['.ogg', '.oga']:
+                # Ogg Vorbis files
+                audio_file.tags['BPM'] = str(bpm_int)
+                
+            else:
+                # Generic approach for other formats
+                if hasattr(audio_file.tags, '__setitem__'):
+                    audio_file.tags['BPM'] = str(bpm_int)
+                else:
+                    return False
+                    
+            audio_file.save()
+            return True
+            
+        else:
+            # No tags exist, try to add them
+            if file_path.suffix.lower() == '.mp3':
+                audio_file.add_tags()
+                audio_file.tags.add(TBPM(encoding=3, text=str(bpm_int)))
+                audio_file.save()
+                return True
+                
+        return False
+        
+    except Exception:
+        return False

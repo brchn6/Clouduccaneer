@@ -36,6 +36,11 @@ cb bpm song.mp3           # Detect BPM of a single file
 cb bpm music_folder/      # Analyze all audio files in folder
 cb bpm folder/ --parallel # Use parallel processing for faster batch analysis
 cb bpm folder/ --basic    # Use basic detection (faster, less accurate)
+
+# Export options (NEW!)
+cb bpm song.mp3 --export-filename    # Add BPM to filename: song [128 BPM].mp3
+cb bpm song.mp3 --export-tags        # Add BPM to audio metadata tags  
+cb bpm folder/ --export-filename --no-backup  # Export and remove originals
 ```
 
 ## BPM Detection Features
@@ -46,6 +51,7 @@ cb bpm folder/ --basic    # Use basic detection (faster, less accurate)
 - **Flexible Options**: Choose between advanced (accurate) or basic (fast) detection modes
 - **Recursive Search**: Automatically finds audio files in subdirectories
 - **Clear Output**: Shows results in format: `Track: song.mp3 → BPM: 128.5`
+- **Export Options**: Add BPM to filenames or metadata tags for organization
 
 ### BPM Detection Examples
 ```bash
@@ -68,4 +74,13 @@ cb bpm ~/Music/ --basic
 
 # Analyze only current directory (no subdirectories)
 cb bpm ~/Music/ --no-recursive
+
+# Export BPM to filenames (creates "song [128 BPM].mp3")
+cb bpm ~/Music/ --export-filename
+
+# Add BPM to metadata tags (MP3, FLAC, M4A, OGG)
+cb bpm ~/Music/ --export-tags
+
+# Export to filenames without keeping originals
+cb bpm ~/Music/ --export-filename --no-backup
 ```
