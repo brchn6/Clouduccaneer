@@ -1,0 +1,18 @@
+[
+  {
+    "role": "user",
+    "content": "I want to download a complete SoundCloud user's uploads and organize them properly"
+  },
+  {
+    "role": "assistant",
+    "content": "You can use CloudBuccaneer to download a user's uploads and then clean the filenames. First, use 'cb fetch-user <user_url> --kind uploads' to download all tracks, then use 'cb rename <folder> --apply' to clean up the filenames."
+  },
+  {
+    "role": "user",
+    "content": "What about organizing by artist and removing duplicate files?"
+  },
+  {
+    "role": "assistant",
+    "content": "The rename command will automatically organize files by artist and title. For duplicates, you can use 'cb dedupe <folder> --apply' to remove files ending with .1 extensions. You can also use 'cb clean <folder>' to remove leftover thumbnail and temporary files."
+  }
+]
