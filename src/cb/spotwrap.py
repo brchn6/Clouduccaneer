@@ -1,10 +1,11 @@
 # cb/spotwrap.py
 from __future__ import annotations
-import subprocess
-import shlex
+
 import re
+import shlex
+import subprocess
 from pathlib import Path
-from typing import Iterable, Optional, List, Dict
+from typing import Dict, Iterable, List, Optional
 
 
 def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
@@ -13,14 +14,23 @@ def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
 
 
 def print_lines(cmd: List[str]) -> Iterable[str]:
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    p = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+    )
     for line in p.stdout:
         yield line.strip()
     p.wait()
 
 
-def fetch(url: str, out_dir: str, audio_fmt="mp3", quality="320k",
-          lyrics=True, playlist_numbering=True, embed_metadata=True) -> int:
+def fetch(
+    url: str,
+    out_dir: str,
+    audio_fmt="mp3",
+    quality="320k",
+    lyrics=True,
+    playlist_numbering=True,
+    embed_metadata=True,
+) -> int:
     """Download a Spotify track/playlist/album using spotdl."""
     cmd = ["spotdl", "download", url]
     cmd += ["--format", audio_fmt]
@@ -35,9 +45,16 @@ def fetch(url: str, out_dir: str, audio_fmt="mp3", quality="320k",
     return run(cmd)
 
 
-def fetch_many(urls: List[str], out_dir: str, audio_fmt="mp3", quality="320k",
-               lyrics=True, playlist_numbering=True, embed_metadata=True,
-               dry: bool = False) -> int:
+def fetch_many(
+    urls: List[str],
+    out_dir: str,
+    audio_fmt="mp3",
+    quality="320k",
+    lyrics=True,
+    playlist_numbering=True,
+    embed_metadata=True,
+    dry: bool = False,
+) -> int:
     """Download multiple Spotify URLs."""
     if dry:
         for u in urls:
@@ -46,8 +63,18 @@ def fetch_many(urls: List[str], out_dir: str, audio_fmt="mp3", quality="320k",
 
     rc = 0
     for u in urls:
-        rc = fetch(u, out_dir, audio_fmt, quality, lyrics, playlist_numbering,
-                   embed_metadata) or rc
+        rc = (
+            fetch(
+                u,
+                out_dir,
+                audio_fmt,
+                quality,
+                lyrics,
+                playlist_numbering,
+                embed_metadata,
+            )
+            or rc
+        )
     return rc
 
 
@@ -58,11 +85,11 @@ def get_metadata(url: str) -> Dict[str, str]:
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         # Parse spotdl output to extract metadata
         # spotdl doesn't have a json output mode, so we need to parse text output
-        lines = result.stdout.strip().split('\n')
+        lines = result.stdout.strip().split("\n")
         metadata = {}
         for line in lines:
-            if ':' in line:
-                key, value = line.split(':', 1)
+            if ":" in line:
+                key, value = line.split(":", 1)
                 metadata[key.strip()] = value.strip()
         return metadata
     except subprocess.CalledProcessError:
@@ -78,10 +105,10 @@ def search_spotify(query: str, type_filter="track", limit=20) -> List[str]:
         result = subprocess.run(cmd, capture_output=True, text=True)
         # Parse the output to extract URLs (this is approximate)
         urls = []
-        for line in result.stdout.split('\n'):
-            if 'spotify.com' in line:
+        for line in result.stdout.split("\n"):
+            if "spotify.com" in line:
                 # Extract Spotify URLs from the output
-                matches = re.findall(r'https://open\.spotify\.com/[^\s]+', line)
+                matches = re.findall(r"https://open\.spotify\.com/[^\s]+", line)
                 urls.extend(matches)
         return urls[:limit]
     except Exception:
@@ -90,14 +117,14 @@ def search_spotify(query: str, type_filter="track", limit=20) -> List[str]:
 
 def validate_spotify_url(url: str) -> bool:
     """Check if a URL is a valid Spotify URL."""
-    return 'spotify.com' in url or 'spotify:' in url
+    return "spotify.com" in url or "spotify:" in url
 
 
 def normalize_spotify_url(url: str) -> str:
     """Normalize Spotify URL format."""
-    if url.startswith('spotify:'):
+    if url.startswith("spotify:"):
         # Convert spotify: URI to https URL
-        parts = url.split(':')
+        parts = url.split(":")
         if len(parts) >= 3:
             return f"https://open.spotify.com/{parts[1]}/{parts[2]}"
     return url

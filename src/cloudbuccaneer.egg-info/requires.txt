@@ -1,6 +1,13 @@
 typer>=0.12
 pyyaml>=6.0
 spotdl>=4.4.0
+librosa>=0.10.0
+
+[metadata]
+mutagen>=1.45.0
+
+[parallel]
+joblib>=1.0.0
 
 [test]
 pytest>=7.0
