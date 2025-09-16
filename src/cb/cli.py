@@ -461,7 +461,9 @@ def _create_conversation_summary(conversation_data: List[Dict]) -> str:
 
     if len(assistant_messages) > 0:
         first_response = assistant_messages[0]
-        preview = first_response[:50] + "..." if len(first_response) > 50 else first_response
+        preview = (
+            first_response[:50] + "..." if len(first_response) > 50 else first_response
+        )
         summary_lines.append(f"Assistant responded with {preview}")
 
     if len(user_messages) > 1:
