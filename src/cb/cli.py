@@ -9,6 +9,7 @@ from .renamer import plan_renames, apply_changes
 import json
 import sys
 from . import spotwrap
+from .bpm import BPMDetector, find_audio_files, format_bpm_result, add_bpm_to_filename, add_bpm_to_tags
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
@@ -345,99 +346,98 @@ def _create_conversation_summary(conversation_data: List[Dict]) -> str:
     return "\n".join(summary_lines)
 
 @app.command()
-def summarize(
-    conversation: str = typer.Argument(..., help="Conversation input as JSON string or file path"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file for summary")):
-    """
-    Create a detailed summary from a series of user/assistant message pairs.
-    Conversation can be provided as JSON string or file path.
-    """
-    try:
-        # Try to load as file path first
-        conv_path = Path(conversation)
-        if conv_path.exists():
-            with conv_path.open('r', encoding='utf-8') as f:
-                conversation_data = json.load(f)
-        else:
-            # Try to parse as JSON string
-            conversation_data = json.loads(conversation)
-    except (json.JSONDecodeError, FileNotFoundError):
-        print("Error: Invalid JSON format or file not found.")
+def bpm(target: Path = typer.Argument(..., help="Audio file or directory to analyze"),
+        parallel: bool = typer.Option(False, "--parallel", help="Use parallel processing for multiple files"),
+        advanced: bool = typer.Option(True, "--advanced/--basic", help="Use advanced multi-method detection"),
+        recursive: bool = typer.Option(True, "--recursive/--no-recursive", help="Search subdirectories"),
+        export_filename: bool = typer.Option(False, "--export-filename", help="Add BPM to filename (e.g., song [128 BPM].mp3)"),
+        export_tags: bool = typer.Option(False, "--export-tags", help="Add BPM to audio file metadata tags"),
+        backup: bool = typer.Option(True, "--backup/--no-backup", help="Keep original files when exporting to filename")):
+    """Analyze audio files and detect their BPM (beats per minute)."""
+    target = target.expanduser()
+    
+    if not target.exists():
+        print(f"Error: Path does not exist: {target}")
         raise typer.Exit(code=1)
     
-    # Validate conversation structure
-    if not isinstance(conversation_data, list):
-        print("It seems that the conversation you intended to provide is incomplete. Please provide the full series of user/assistant message pairs so I can create a detailed summary for you.")
-        raise typer.Exit(code=1)
+    detector = BPMDetector(use_advanced=advanced)
     
-    # Check if conversation contains valid message pairs
-    valid_pairs = 0
-    for item in conversation_data:
-        if isinstance(item, dict) and 'role' in item and 'content' in item:
-            if item['role'] in ['user', 'assistant'] and item['content'].strip():
-                valid_pairs += 1
-    
-    if valid_pairs < 2:  # Need at least one user and one assistant message
-        print("It seems that the conversation you intended to provide is incomplete. Please provide the full series of user/assistant message pairs so I can create a detailed summary for you.")
-        raise typer.Exit(code=1)
-    
-    # Create summary
-    summary = _create_conversation_summary(conversation_data)
-    
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with output.open('w', encoding='utf-8') as f:
-            f.write(summary)
-        print(f"Summary written to: {output}")
+    if target.is_file():
+        # Single file processing
+        if not detector.is_supported_format(target):
+            print(f"Error: Unsupported file format: {target.suffix}")
+            print(f"Supported formats: {', '.join(sorted(detector.SUPPORTED_FORMATS))}")
+            raise typer.Exit(code=1)
+        
+        print(f"Analyzing: {target.name}")
+        bpm = detector.detect_bpm(target)
+        print(format_bpm_result(target, bpm))
+        
+        # Export options
+        if bpm is not None:
+            if export_filename:
+                new_path = add_bpm_to_filename(target, bpm, backup=backup)
+                if new_path:
+                    print(f"Exported to filename: {new_path.name}")
+                else:
+                    print("Failed to export to filename")
+            
+            if export_tags:
+                success = add_bpm_to_tags(target, bpm)
+                if success:
+                    print("Added BPM to metadata tags")
+                else:
+                    print("Failed to add BPM to metadata tags")
+        
+    elif target.is_dir():
+        # Directory processing
+        audio_files = find_audio_files(target, recursive=recursive)
+        
+        if not audio_files:
+            print(f"No supported audio files found in: {target}")
+            print(f"Supported formats: {', '.join(sorted(detector.SUPPORTED_FORMATS))}")
+            raise typer.Exit(code=0)
+        
+        print(f"Found {len(audio_files)} audio file(s) in: {target}")
+        if len(audio_files) > 1 and parallel:
+            print("Using parallel processing...")
+        
+        # Detect BPM for all files
+        results = detector.detect_bpm_batch(audio_files, parallel=parallel)
+        
+        # Display results and export
+        print()
+        exported_filenames = 0
+        exported_tags = 0
+        
+        for file_path, bpm in results.items():
+            print(format_bpm_result(file_path, bpm))
+            
+            # Export options
+            if bpm is not None:
+                if export_filename:
+                    new_path = add_bpm_to_filename(file_path, bpm, backup=backup)
+                    if new_path:
+                        exported_filenames += 1
+                
+                if export_tags:
+                    success = add_bpm_to_tags(file_path, bpm)
+                    if success:
+                        exported_tags += 1
+            
+        # Summary
+        successful = sum(1 for bpm in results.values() if bpm is not None)
+        print(f"\nSummary: {successful}/{len(audio_files)} files analyzed successfully")
+        
+        if export_filename:
+            print(f"Exported to filename: {exported_filenames}/{successful} files")
+        if export_tags:
+            print(f"Added to metadata tags: {exported_tags}/{successful} files")
+            
     else:
-        print(summary)
+        print(f"Error: Invalid target type: {target}")
+        raise typer.Exit(code=1)
 
-def _create_conversation_summary(conversation_data: List[Dict]) -> str:
-    """Generate a detailed summary from conversation data."""
-    user_messages = []
-    assistant_messages = []
-    
-    for msg in conversation_data:
-        if msg.get('role') == 'user' and msg.get('content', '').strip():
-            user_messages.append(msg['content'].strip())
-        elif msg.get('role') == 'assistant' and msg.get('content', '').strip():
-            assistant_messages.append(msg['content'].strip())
-    
-    summary_lines = [
-        "# Conversation Summary",
-        "",
-        f"**Total Messages:** {len(conversation_data)}",
-        f"**User Messages:** {len(user_messages)}",
-        f"**Assistant Messages:** {len(assistant_messages)}",
-        "",
-        "## Key Topics Discussed:",
-    ]
-    
-    # Extract key topics from user messages
-    topics = set()
-    for msg in user_messages[:5]:  # Look at first 5 user messages for topics
-        words = msg.lower().split()
-        # Simple keyword extraction
-        for word in words:
-            if len(word) > 4 and word.isalpha():
-                topics.add(word)
-    
-    for topic in sorted(list(topics)[:10]):  # Limit to 10 topics
-        summary_lines.append(f"- {topic.title()}")
-    
-    summary_lines.extend([
-        "",
-        "## Conversation Flow:",
-        f"The conversation began with user asking about {user_messages[0][:50] + '...' if len(user_messages[0]) > 50 else user_messages[0]}",
-    ])
-    
-    if len(assistant_messages) > 0:
-        summary_lines.append(f"Assistant responded with {assistant_messages[0][:50] + '...' if len(assistant_messages[0]) > 50 else assistant_messages[0]}")
-    
-    if len(user_messages) > 1:
-        summary_lines.append(f"The conversation continued with {len(user_messages) - 1} additional user message(s).")
-    
-    return "\n".join(summary_lines)
 
 if __name__ == "__main__":
     app()
