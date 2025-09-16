@@ -1,21 +1,22 @@
 # cb/cli.py
 from __future__ import annotations
+import json
 import typer
 from pathlib import Path
 from typing import Optional, Dict, List
 from .utils import load_config
 from . import ytwrap
 from .renamer import plan_renames, apply_changes
-import json
-import sys
 from . import spotwrap
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
+
 @app.command()
 def fetch(url: str,
           dest: Path = typer.Option(None, "--dest", help="Destination directory"),
-          limit_seconds: int = typer.Option(None, "--max-seconds", help="Skip tracks longer than this"),
+          limit_seconds: int = typer.Option(None, "--max-seconds", 
+                                           help="Skip tracks longer than this"),
           dry: bool = typer.Option(False, "--dry", help="Print what would be done")):
     """Download a playlist/track/user/likes/reposts with yt-dlp using sane defaults."""
     cfg = load_config()
@@ -24,17 +25,23 @@ def fetch(url: str,
 
     # When limiting by duration, enumerate track urls first
     if limit_seconds is not None:
-        urls = list(ytwrap.print_lines(["yt-dlp", "--flat-playlist", "--print", "%(url)s", url]))
+        urls = list(ytwrap.print_lines([
+            "yt-dlp", "--flat-playlist", "--print", "%(url)s", url
+        ]))
         dmap = ytwrap.duration_map(urls)
         urls = [u for u in urls if 0 < dmap.get(u, 0) < limit_seconds]
         if dry:
-            for u in urls: print("[DRY] would fetch:", u); return
+            for u in urls:
+                print("[DRY] would fetch:", u)
+            return
         for u in urls:
             ytwrap.fetch(u, str(base / cfg["out_template"]))
     else:
         if dry:
-            print("[DRY] would fetch:", url); return
+            print("[DRY] would fetch:", url)
+            return
         ytwrap.fetch(url, str(base / cfg["out_template"]))
+
 
 @app.command()
 def rename(folder: Path = typer.Argument(..., help="Folder to clean"),
@@ -45,32 +52,48 @@ def rename(folder: Path = typer.Argument(..., help="Folder to clean"),
            undo: Path = typer.Option(Path("undo_cloudbuccaneer.csv"), "--undo")):
     """Clean filenames: strip junk; guess artist/title; keep track # optionally; move covers."""
     cfg = load_config()
-    if ascii_only is None: ascii_only = bool(cfg["rename"].get("ascii", True))
-    if keep_track is None: keep_track = bool(cfg["rename"].get("keep_track", True))
-    changes = plan_renames(folder.expanduser(), ascii_only=ascii_only, keep_track=keep_track)
-    if not changes: print("Nothing to change."); raise typer.Exit(code=0)
-    for old, new in changes: print(f"[{'APPLY' if apply else 'DRY'}] {old} -> {new}")
+    if ascii_only is None:
+        ascii_only = bool(cfg["rename"].get("ascii", True))
+    if keep_track is None:
+        keep_track = bool(cfg["rename"].get("keep_track", True))
+    changes = plan_renames(folder.expanduser(), ascii_only=ascii_only, 
+                          keep_track=keep_track)
+    if not changes:
+        print("Nothing to change.")
+        raise typer.Exit(code=0)
+    for old, new in changes:
+        print(f"[{'APPLY' if apply else 'DRY'}] {old} -> {new}")
     if apply:
-        apply_changes(changes, move_covers=move_covers or bool(cfg["rename"].get("move_covers", False)),
-                      undo_csv=undo.expanduser())
+        apply_changes(
+            changes,
+            move_covers=move_covers or bool(cfg["rename"].get("move_covers", False)),
+            undo_csv=undo.expanduser()
+        )
 
 @app.command()
 def dedupe(root: Path = typer.Argument(..., help="Kill *.1.mp3 style dupes"),
            apply: bool = typer.Option(False, "--apply")):
     """Remove simple duplicate files that end with .1 before the extension."""
     root = root.expanduser()
-    victims = list(p for p in root.rglob("*") if p.is_file() and p.suffix.lower()==".mp3" and p.stem.endswith(".1"))
+    victims = list(p for p in root.rglob("*") 
+                   if p.is_file() and p.suffix.lower() == ".mp3" and 
+                   p.stem.endswith(".1"))
     for v in victims:
         print(f"[{'DELETE' if apply else 'DRY'}] {v}")
-        if apply: v.unlink()
+        if apply:
+            v.unlink()
+
 
 @app.command()
 def search(query: str,
            max: int = typer.Option(20, "--max", help="Max results to take"),
-           kind: str = typer.Option("tracks", "--kind", help="'tracks' (default), 'sets', or 'users'"),
-           cluster: bool = typer.Option(False, "--cluster", help="Group results by uploader"),
+           kind: str = typer.Option("tracks", "--kind", 
+                                   help="'tracks' (default), 'sets', or 'users'"),
+           cluster: bool = typer.Option(False, "--cluster", 
+                                       help="Group results by uploader"),
            dest: Path = typer.Option(None, "--dest", help="Destination directory"),
-           max_seconds: Optional[int] = typer.Option(None, "--max-seconds", help="Skip tracks longer than this"),
+           max_seconds: Optional[int] = typer.Option(None, "--max-seconds", 
+                                                    help="Skip tracks longer than this"),
            dry: bool = typer.Option(False, "--dry", help="Preview without downloading")):
     """
     Search SoundCloud via yt-dlp's scsearch and (optionally) cluster by uploader.
@@ -344,100 +367,6 @@ def _create_conversation_summary(conversation_data: List[Dict]) -> str:
     
     return "\n".join(summary_lines)
 
-@app.command()
-def summarize(
-    conversation: str = typer.Argument(..., help="Conversation input as JSON string or file path"),
-    output: Optional[Path] = typer.Option(None, "--output", "-o", help="Output file for summary")):
-    """
-    Create a detailed summary from a series of user/assistant message pairs.
-    Conversation can be provided as JSON string or file path.
-    """
-    try:
-        # Try to load as file path first
-        conv_path = Path(conversation)
-        if conv_path.exists():
-            with conv_path.open('r', encoding='utf-8') as f:
-                conversation_data = json.load(f)
-        else:
-            # Try to parse as JSON string
-            conversation_data = json.loads(conversation)
-    except (json.JSONDecodeError, FileNotFoundError):
-        print("Error: Invalid JSON format or file not found.")
-        raise typer.Exit(code=1)
-    
-    # Validate conversation structure
-    if not isinstance(conversation_data, list):
-        print("It seems that the conversation you intended to provide is incomplete. Please provide the full series of user/assistant message pairs so I can create a detailed summary for you.")
-        raise typer.Exit(code=1)
-    
-    # Check if conversation contains valid message pairs
-    valid_pairs = 0
-    for item in conversation_data:
-        if isinstance(item, dict) and 'role' in item and 'content' in item:
-            if item['role'] in ['user', 'assistant'] and item['content'].strip():
-                valid_pairs += 1
-    
-    if valid_pairs < 2:  # Need at least one user and one assistant message
-        print("It seems that the conversation you intended to provide is incomplete. Please provide the full series of user/assistant message pairs so I can create a detailed summary for you.")
-        raise typer.Exit(code=1)
-    
-    # Create summary
-    summary = _create_conversation_summary(conversation_data)
-    
-    if output:
-        output.parent.mkdir(parents=True, exist_ok=True)
-        with output.open('w', encoding='utf-8') as f:
-            f.write(summary)
-        print(f"Summary written to: {output}")
-    else:
-        print(summary)
-
-def _create_conversation_summary(conversation_data: List[Dict]) -> str:
-    """Generate a detailed summary from conversation data."""
-    user_messages = []
-    assistant_messages = []
-    
-    for msg in conversation_data:
-        if msg.get('role') == 'user' and msg.get('content', '').strip():
-            user_messages.append(msg['content'].strip())
-        elif msg.get('role') == 'assistant' and msg.get('content', '').strip():
-            assistant_messages.append(msg['content'].strip())
-    
-    summary_lines = [
-        "# Conversation Summary",
-        "",
-        f"**Total Messages:** {len(conversation_data)}",
-        f"**User Messages:** {len(user_messages)}",
-        f"**Assistant Messages:** {len(assistant_messages)}",
-        "",
-        "## Key Topics Discussed:",
-    ]
-    
-    # Extract key topics from user messages
-    topics = set()
-    for msg in user_messages[:5]:  # Look at first 5 user messages for topics
-        words = msg.lower().split()
-        # Simple keyword extraction
-        for word in words:
-            if len(word) > 4 and word.isalpha():
-                topics.add(word)
-    
-    for topic in sorted(list(topics)[:10]):  # Limit to 10 topics
-        summary_lines.append(f"- {topic.title()}")
-    
-    summary_lines.extend([
-        "",
-        "## Conversation Flow:",
-        f"The conversation began with user asking about {user_messages[0][:50] + '...' if len(user_messages[0]) > 50 else user_messages[0]}",
-    ])
-    
-    if len(assistant_messages) > 0:
-        summary_lines.append(f"Assistant responded with {assistant_messages[0][:50] + '...' if len(assistant_messages[0]) > 50 else assistant_messages[0]}")
-    
-    if len(user_messages) > 1:
-        summary_lines.append(f"The conversation continued with {len(user_messages) - 1} additional user message(s).")
-    
-    return "\n".join(summary_lines)
 
 if __name__ == "__main__":
     app()

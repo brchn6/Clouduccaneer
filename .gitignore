@@ -6,3 +6,4 @@ results/
 *.data
 .pytest_cache/
 *.egg-info/
+pytest*

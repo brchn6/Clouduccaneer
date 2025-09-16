@@ -3,6 +3,7 @@ pyproject.toml
 src/cb/__init__.py
 src/cb/cli.py
 src/cb/renamer.py
+src/cb/spotwrap.py
 src/cb/utils.py
 src/cb/ytwrap.py
 src/cloudbuccaneer.egg-info/PKG-INFO
@@ -11,3 +12,11 @@ src/cloudbuccaneer.egg-info/dependency_links.txt
 src/cloudbuccaneer.egg-info/entry_points.txt
 src/cloudbuccaneer.egg-info/requires.txt
 src/cloudbuccaneer.egg-info/top_level.txt
+tests/test_cli.py
+tests/test_integration.py
+tests/test_renamer.py
+tests/test_renamer_simple.py
+tests/test_spotwrap.py
+tests/test_summarize.py
+tests/test_utils.py
+tests/test_ytwrap.py
