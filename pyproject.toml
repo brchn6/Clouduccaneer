@@ -10,6 +10,9 @@ dependencies = ["typer>=0.12", "pyyaml>=6.0", "spotdl>=4.4.0", "librosa>=0.10.0"
 parallel = ["joblib>=1.0.0"]
 metadata = ["mutagen>=1.45.0"]
 
+[project.optional-dependencies]
+test = ["pytest>=7.0", "pytest-cov>=4.0", "pytest-mock>=3.0", "pytest-xdist>=3.0"]
+
 [project.scripts]
 cb = "cb.cli:app"
 

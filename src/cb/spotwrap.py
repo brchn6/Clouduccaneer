@@ -1,19 +1,23 @@
 # cb/spotwrap.py
 from __future__ import annotations
-import subprocess, shlex
+import subprocess
+import shlex
+import re
 from pathlib import Path
 from typing import Iterable, Optional, List, Dict
-import json
 
-def run(cmd: List[str], cwd: Optional[Path]=None) -> int:
+
+def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
     print("▶", " ".join(shlex.quote(c) for c in cmd))
     return subprocess.call(cmd, cwd=str(cwd) if cwd else None)
 
+
 def print_lines(cmd: List[str]) -> Iterable[str]:
     p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
-    for line in p.stdout: 
+    for line in p.stdout:
         yield line.strip()
     p.wait()
+
 
 def fetch(url: str, out_dir: str, audio_fmt="mp3", quality="320k",
           lyrics=True, playlist_numbering=True, embed_metadata=True) -> int:
@@ -22,27 +26,30 @@ def fetch(url: str, out_dir: str, audio_fmt="mp3", quality="320k",
     cmd += ["--format", audio_fmt]
     cmd += ["--bitrate", quality]
     cmd += ["--output", out_dir]
-    
+
     if lyrics:
         cmd += ["--lyrics", "genius", "musixmatch"]
     if playlist_numbering:
         cmd += ["--playlist-numbering"]
-    
+
     return run(cmd)
 
+
 def fetch_many(urls: List[str], out_dir: str, audio_fmt="mp3", quality="320k",
-               lyrics=True, playlist_numbering=True, embed_metadata=True, 
+               lyrics=True, playlist_numbering=True, embed_metadata=True,
                dry: bool = False) -> int:
     """Download multiple Spotify URLs."""
     if dry:
-        for u in urls: 
+        for u in urls:
             print(f"[DRY] would fetch spotify: {u}")
         return 0
-    
+
     rc = 0
     for u in urls:
-        rc = fetch(u, out_dir, audio_fmt, quality, lyrics, playlist_numbering, embed_metadata) or rc
+        rc = fetch(u, out_dir, audio_fmt, quality, lyrics, playlist_numbering,
+                   embed_metadata) or rc
     return rc
+
 
 def get_metadata(url: str) -> Dict[str, str]:
     """Get metadata for a Spotify URL without downloading."""
@@ -61,6 +68,7 @@ def get_metadata(url: str) -> Dict[str, str]:
     except subprocess.CalledProcessError:
         return {}
 
+
 def search_spotify(query: str, type_filter="track", limit=20) -> List[str]:
     """Search Spotify and return URLs."""
     # Note: spotdl doesn't have a direct search command that returns URLs
@@ -73,16 +81,17 @@ def search_spotify(query: str, type_filter="track", limit=20) -> List[str]:
         for line in result.stdout.split('\n'):
             if 'spotify.com' in line:
                 # Extract Spotify URLs from the output
-                import re
                 matches = re.findall(r'https://open\.spotify\.com/[^\s]+', line)
                 urls.extend(matches)
         return urls[:limit]
-    except:
+    except Exception:
         return []
+
 
 def validate_spotify_url(url: str) -> bool:
     """Check if a URL is a valid Spotify URL."""
     return 'spotify.com' in url or 'spotify:' in url
+
 
 def normalize_spotify_url(url: str) -> str:
     """Normalize Spotify URL format."""
@@ -92,6 +101,7 @@ def normalize_spotify_url(url: str) -> str:
         if len(parts) >= 3:
             return f"https://open.spotify.com/{parts[1]}/{parts[2]}"
     return url
+
 
 def get_playlist_tracks(playlist_url: str) -> List[str]:
     """Get individual track URLs from a Spotify playlist."""

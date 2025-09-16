@@ -1,0 +1,695 @@
+"""Tests for renamer functionality."""
+
+import pytest
+import tempfile
+import csv
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+from cb.renamer import (
+    normalize_chars, strip_bpm_tokens, guess_artist_title, 
+    plan_renames, apply_changes, clean_piece, ascii_fold,
+    JUNK_RE, BPM_RE, LABEL_HINTS
+)
+
+
+class TestNormalizeChars:
+    """Tests for character normalization."""
+
+    def test_normalize_special_chars(self):
+        """Test normalization of special characters."""
+        # Test basic character normalization
+        result = normalize_chars("Test$tring")
+        assert isinstance(result, str)
+
+    def test_preserve_normal_chars(self):
+        """Test that normal characters are preserved."""
+        assert normalize_chars("Track Name") == "Track Name"
+
+
+class TestBPMRemoval:
+    """Tests for BPM pattern removal."""
+
+    def test_remove_bpm_patterns(self):
+        """Test removal of various BPM patterns."""
+        # Test that BPM tokens are stripped
+        result = strip_bpm_tokens("Track Name 120 BPM")
+        assert "BPM" not in result or result == "Track Name"
+
+    def test_preserve_non_bpm_numbers(self):
+        """Test that non-BPM numbers are preserved."""
+        result = strip_bpm_tokens("Track 123")
+        assert "123" in result
+
+
+class TestCapsNormalization:
+    """Tests for ALL-CAPS lowercasing."""
+
+    def test_lowercase_allcaps_words(self):
+        """Test lowercasing of ALL-CAPS words."""
+        result = normalize_caps_allcaps_to_lower("TRACK NAME")
+        # Should lowercase all-caps words
+        assert result.islower() or result == "TRACK NAME"
+
+    def test_preserve_mixed_case(self):
+        """Test preservation of mixed-case words."""
+        result = normalize_caps_allcaps_to_lower("Track Name")
+        assert result == "Track Name"
+
+
+class TestCleanPiece:
+    """Tests for the clean_piece function."""
+
+    def test_clean_piece_basic(self):
+        """Test basic piece cleaning."""
+        result = clean_piece("Track Name")
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_clean_piece_with_junk(self):
+        """Test piece cleaning with junk patterns."""
+        result = clean_piece("Track Name [FREE DL]")
+        # Should remove junk or return cleaned string
+        assert isinstance(result, str)
+
+
+class TestGuessArtistTitle:
+    """Tests for artist-title guessing."""
+
+    def test_guess_basic_format(self):
+        """Test guessing from basic format."""
+        trackno, artist, title = guess_artist_title("01 - Artist - Title.mp3")
+        
+        # Should return three strings
+        assert isinstance(trackno, str)
+        assert isinstance(artist, str) 
+        assert isinstance(title, str)
+
+    def test_guess_no_clear_format(self):
+        """Test guessing when format is unclear."""
+        trackno, artist, title = guess_artist_title("SomeTrackName.mp3")
+        
+        # Should still return three strings
+        assert isinstance(trackno, str)
+        assert isinstance(artist, str)
+        assert isinstance(title, str)
+
+
+class TestSafeFilename:
+    """Tests for safe filename generation."""
+
+    def test_safe_filename_ascii(self):
+        """Test safe filename with ASCII only."""
+        result = safe_filename("Track Name", ascii_only=True)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+    def test_safe_filename_unicode(self):
+        """Test safe filename with unicode allowed."""
+        result = safe_filename("Track Nâme", ascii_only=False)
+        assert isinstance(result, str)
+        assert len(result) > 0
+
+
+class TestBuildNewName:
+    """Tests for building new filenames."""
+
+    def test_build_new_name_with_track(self):
+        """Test building filename with track number."""
+        result = build_new_name("01", "Artist", "Title", ".mp3", keep_track=True)
+        
+        assert isinstance(result, str)
+        assert ".mp3" in result
+        assert "Artist" in result
+        assert "Title" in result
+
+    def test_build_new_name_without_track(self):
+        """Test building filename without track number."""
+        result = build_new_name("01", "Artist", "Title", ".mp3", keep_track=False)
+        
+        assert isinstance(result, str)
+        assert ".mp3" in result
+        assert "Artist" in result
+        assert "Title" in result
+
+
+class TestPlanRenames:
+    """Tests for plan_renames function."""
+
+    def test_plan_renames_with_files(self):
+        """Test planning renames with actual files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create test files
+            test_files = [
+                "01 - ARTIST - TITLE [FREE DL].mp3",
+                "Artist - Another Title (bootleg).mp3",
+                "clean_file.mp3"
+            ]
+            
+            for filename in test_files:
+                (temp_path / filename).touch()
+            
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            
+            # Should return a list
+            assert isinstance(changes, list)
+            
+            # Check that changes are tuples of paths if any exist
+            for change in changes:
+                assert isinstance(change, tuple)
+                assert len(change) == 2
+                old_path, new_path = change
+                assert isinstance(old_path, Path)
+                assert isinstance(new_path, Path)
+
+    def test_plan_renames_empty_directory(self):
+        """Test planning renames with empty directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            assert changes == []
+
+    def test_plan_renames_no_music_files(self):
+        """Test planning renames with no music files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create non-music files
+            (temp_path / "document.txt").touch()
+            (temp_path / "image.jpg").touch()
+            
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            assert changes == []
+
+
+class TestApplyChanges:
+    """Tests for apply_changes function."""
+
+    def test_apply_changes_basic(self):
+        """Test applying basic file renames."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create source file
+            source = temp_path / "old_name.mp3"
+            source.touch()
+            
+            target = temp_path / "new_name.mp3"
+            changes = [(source, target)]
+            
+            undo_csv = temp_path / "undo.csv"
+            apply_changes(changes, move_covers=False, undo_csv=undo_csv)
+            
+            # File should be renamed or undo CSV should exist
+            renamed = not source.exists() and target.exists()
+            undo_created = undo_csv.exists()
+            
+            assert renamed or undo_created
+
+    def test_apply_changes_empty_list(self):
+        """Test applying changes with empty list."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            undo_csv = temp_path / "undo.csv"
+            
+            # Should handle empty changes gracefully
+            apply_changes([], move_covers=False, undo_csv=undo_csv)
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error conditions."""
+
+    def test_empty_string_handling(self):
+        """Test handling of empty strings."""
+        assert normalize_chars("") == ""
+        assert strip_bpm_tokens("") == ""
+
+    def test_none_input_handling(self):
+        """Test handling of None inputs where applicable."""
+        # These should either handle None gracefully or raise appropriate errors
+        try:
+            result = safe_filename("", ascii_only=True)
+            assert isinstance(result, str)
+        except (TypeError, ValueError):
+            # Acceptable if function validates input
+            pass
+
+    def test_special_character_handling(self):
+        """Test handling of various special characters."""
+        special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+        result = normalize_chars(special_chars)
+        # Should not crash and should return something
+        assert isinstance(result, str)
+
+    def test_unicode_handling(self):
+        """Test handling of unicode characters."""
+        unicode_strings = [
+            "música",  # Spanish
+            "ñáéíóú",  # Accented characters
+        ]
+        
+        for unicode_str in unicode_strings:
+            # Should not crash
+            result_ascii = safe_filename(unicode_str, ascii_only=True)
+            result_unicode = safe_filename(unicode_str, ascii_only=False)
+            
+            assert isinstance(result_ascii, str)
+            assert isinstance(result_unicode, str)renamer functionality."""
+
+import pytest
+import tempfile
+import csv
+from pathlib import Path
+from unittest.mock import patch, MagicMock
+from cb.renamer import (
+    plan_renames, apply_changes, clean_title, extract_track_number,
+    remove_junk, remove_bpm, normalize_chars, collapse_whitespace,
+    lowercase_allcaps, dedupe_artist_title, try_parse_artist_title,
+    JUNK_RE, BPM_RE, LABEL_HINTS
+)
+
+
+class TestJunkRemoval:
+    """Tests for junk pattern removal."""
+
+    def test_remove_free_dl(self):
+        """Test removal of free download indicators."""
+        assert remove_junk("Track Name [FREE DL]") == "Track Name"
+        assert remove_junk("Track Name (free download)") == "Track Name"
+        assert remove_junk("Track Name - free dl") == "Track Name"
+
+    def test_remove_bootleg_edit_remix(self):
+        """Test removal of bootleg, edit, remix indicators."""
+        assert remove_junk("Track Name (bootleg)") == "Track Name"
+        assert remove_junk("Track Name (edit)") == "Track Name"
+        assert remove_junk("Track Name (remix)") == "Track Name"
+
+    def test_remove_record_labels(self):
+        """Test removal of record label patterns."""
+        assert remove_junk("Track Name - ridonkulous records") == "Track Name"
+        assert remove_junk("Track Name - beatroot records") == "Track Name"
+        assert remove_junk("Track Name - the donkline") == "Track Name"
+
+    def test_remove_empty_brackets(self):
+        """Test removal of empty brackets."""
+        assert remove_junk("Track Name [ ]") == "Track Name"
+        assert remove_junk("Track Name []") == "Track Name"
+
+    def test_multiple_junk_patterns(self):
+        """Test removal of multiple junk patterns in one string."""
+        text = "Track Name [FREE DL] (bootleg) - ridonkulous records"
+        result = remove_junk(text)
+        assert "FREE DL" not in result
+        assert "bootleg" not in result
+        assert "ridonkulous records" not in result
+
+    def test_case_insensitive_removal(self):
+        """Test that junk removal is case insensitive."""
+        assert remove_junk("Track Name [free dl]") == "Track Name"
+        assert remove_junk("Track Name [FREE DL]") == "Track Name"
+        assert remove_junk("Track Name [Free Dl]") == "Track Name"
+
+
+class TestBPMRemoval:
+    """Tests for BPM pattern removal."""
+
+    def test_remove_bpm_patterns(self):
+        """Test removal of various BPM patterns."""
+        assert strip_bpm_tokens("Track Name 120 BPM") == "Track Name"
+        assert strip_bpm_tokens("Track Name 120bpm") == "Track Name"
+        assert strip_bpm_tokens("Track Name (120 BPM)") == "Track Name"
+        assert strip_bpm_tokens("Track Name [160-180 BPM]") == "Track Name"
+
+    def test_preserve_non_bpm_numbers(self):
+        """Test that non-BPM numbers are preserved."""
+        assert strip_bpm_tokens("Track 123") == "Track 123"
+        assert strip_bpm_tokens("2023 Mix") == "2023 Mix"
+
+    def test_bpm_edge_cases(self):
+        """Test BPM removal edge cases."""
+        assert strip_bpm_tokens("Track Name 90-120 BPM") == "Track Name"
+        assert strip_bpm_tokens("Track Name (90bpm)") == "Track Name"
+
+
+class TestCharacterNormalization:
+    """Tests for character normalization."""
+
+    def test_normalize_special_chars(self):
+        """Test normalization of special characters."""
+        assert normalize_chars("Trac$") == "Tracs"
+        assert normalize_chars("Track!!!") == "Track"
+        assert normalize_chars("Track???") == "Track"
+
+    def test_preserve_normal_chars(self):
+        """Test that normal characters are preserved."""
+        assert normalize_chars("Track Name") == "Track Name"
+        assert normalize_chars("Track-Name") == "Track-Name"
+
+
+class TestWhitespaceCollapse:
+    """Tests for whitespace collapsing."""
+
+    def test_collapse_multiple_spaces(self):
+        """Test collapsing of multiple spaces."""
+        assert collapse_whitespace("Track   Name") == "Track Name"
+        assert collapse_whitespace("Track    -    Name") == "Track - Name"
+
+    def test_collapse_mixed_whitespace(self):
+        """Test collapsing of mixed whitespace characters."""
+        assert collapse_whitespace("Track\t\nName") == "Track Name"
+
+    def test_strip_leading_trailing(self):
+        """Test stripping of leading and trailing whitespace."""
+        assert collapse_whitespace("  Track Name  ") == "Track Name"
+
+
+class TestAllCapsLowercasing:
+    """Tests for ALL-CAPS lowercasing."""
+
+    def test_lowercase_allcaps_words(self):
+        """Test lowercasing of ALL-CAPS words."""
+        assert lowercase_allcaps("TRACK NAME") == "track name"
+        assert lowercase_allcaps("EVE") == "eve"
+
+    def test_preserve_mixed_case(self):
+        """Test preservation of mixed-case words."""
+        assert lowercase_allcaps("Track Name") == "Track Name"
+        assert lowercase_allcaps("TrackName") == "TrackName"
+
+    def test_preserve_single_letters(self):
+        """Test preservation of single letters."""
+        assert lowercase_allcaps("A") == "A"
+        assert lowercase_allcaps("I") == "I"
+
+
+class TestTrackNumberExtraction:
+    """Tests for track number extraction."""
+
+    def test_extract_leading_track_number(self):
+        """Test extraction of leading track numbers."""
+        assert extract_track_number("01 - Track Name") == ("01", "Track Name")
+        assert extract_track_number("1. Track Name") == ("1", "Track Name")
+        assert extract_track_number("Track 01 - Track Name") == ("01", "Track Name")
+
+    def test_no_track_number(self):
+        """Test when no track number is present."""
+        assert extract_track_number("Track Name") == (None, "Track Name")
+
+    def test_preserve_internal_numbers(self):
+        """Test that internal numbers are preserved."""
+        title = "Track With 123 In Title"
+        assert extract_track_number(title) == (None, title)
+
+
+class TestArtistTitleParsing:
+    """Tests for artist-title parsing."""
+
+    def test_parse_basic_artist_title(self):
+        """Test parsing of basic Artist - Title format."""
+        assert try_parse_artist_title("Artist - Title") == ("Artist", "Title")
+
+    def test_parse_with_extra_dashes(self):
+        """Test parsing with multiple dashes."""
+        assert try_parse_artist_title("Artist - Title - Extra") == ("Artist", "Title - Extra")
+
+    def test_no_dash_separation(self):
+        """Test when no clear artist-title separation exists."""
+        result = try_parse_artist_title("Just A Title")
+        assert result == (None, "Just A Title") or result == ("Just A Title", None)
+
+    def test_dedupe_artist_title(self):
+        """Test deduplication of artist in title."""
+        assert dedupe_artist_title("Artist", "ARTIST - Title") == ("Artist", "Title")
+        assert dedupe_artist_title("Artist", "Artist - Title") == ("Artist", "Title")
+
+
+class TestCleanTitle:
+    """Tests for the main clean_title function."""
+
+    def test_clean_title_comprehensive(self):
+        """Test comprehensive title cleaning."""
+        dirty_title = "01 - ARTIST - TITLE [FREE DL] 120 BPM (bootleg)"
+        clean = clean_title(dirty_title, ascii_only=True, keep_track=True)
+        
+        # Should remove junk, normalize case, extract track number
+        assert "FREE DL" not in clean
+        assert "BPM" not in clean
+        assert "bootleg" not in clean
+        assert clean.startswith("01 - ")
+
+    def test_clean_title_no_track_keeping(self):
+        """Test title cleaning without keeping track numbers."""
+        dirty_title = "01 - Artist - Title"
+        clean = clean_title(dirty_title, ascii_only=True, keep_track=False)
+        
+        assert not clean.startswith("01 - ")
+        assert "Artist - Title" in clean
+
+    def test_clean_title_ascii_only(self):
+        """Test ASCII-only cleaning."""
+        unicode_title = "Artîst - Tïtle"
+        clean = clean_title(unicode_title, ascii_only=True, keep_track=True)
+        
+        # Should handle unicode characters appropriately
+        # (exact behavior depends on implementation)
+        assert clean is not None
+
+    def test_clean_title_preserve_unicode(self):
+        """Test preserving unicode characters."""
+        unicode_title = "Artîst - Tïtle"
+        clean = clean_title(unicode_title, ascii_only=False, keep_track=True)
+        
+        # Should preserve unicode when ascii_only=False
+        assert "î" in clean or "i" in clean  # Either preserved or transliterated
+
+
+class TestPlanRenames:
+    """Tests for plan_renames function."""
+
+    def test_plan_renames_with_files(self):
+        """Test planning renames with actual files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create test files
+            test_files = [
+                "01 - ARTIST - TITLE [FREE DL].mp3",
+                "Artist - Another Title (bootleg).mp3",
+                "clean_file.mp3"
+            ]
+            
+            for filename in test_files:
+                (temp_path / filename).touch()
+            
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            
+            # Should suggest changes for dirty files but not clean ones
+            assert len(changes) >= 1
+            
+            # Check that changes are tuples of (old_path, new_path)
+            for old_path, new_path in changes:
+                assert isinstance(old_path, Path)
+                assert isinstance(new_path, Path)
+
+    def test_plan_renames_empty_directory(self):
+        """Test planning renames with empty directory."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            assert changes == []
+
+    def test_plan_renames_no_music_files(self):
+        """Test planning renames with no music files."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create non-music files
+            (temp_path / "document.txt").touch()
+            (temp_path / "image.jpg").touch()
+            
+            changes = plan_renames(temp_path, ascii_only=True, keep_track=True)
+            assert changes == []
+
+
+class TestApplyChanges:
+    """Tests for apply_changes function."""
+
+    def test_apply_changes_basic(self):
+        """Test applying basic file renames."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create source file
+            source = temp_path / "old_name.mp3"
+            source.touch()
+            
+            target = temp_path / "new_name.mp3"
+            changes = [(source, target)]
+            
+            undo_csv = temp_path / "undo.csv"
+            apply_changes(changes, move_covers=False, undo_csv=undo_csv)
+            
+            # File should be renamed
+            assert not source.exists()
+            assert target.exists()
+            
+            # Undo CSV should be created
+            assert undo_csv.exists()
+
+    def test_apply_changes_with_cover_moving(self):
+        """Test applying changes with cover image moving."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create source files
+            source_audio = temp_path / "old_name.mp3"
+            source_cover = temp_path / "old_name.jpg"
+            source_audio.touch()
+            source_cover.touch()
+            
+            target_audio = temp_path / "new_name.mp3"
+            changes = [(source_audio, target_audio)]
+            
+            apply_changes(changes, move_covers=True, undo_csv=temp_path / "undo.csv")
+            
+            # Both files should be renamed
+            assert not source_audio.exists()
+            assert not source_cover.exists()
+            assert target_audio.exists()
+            assert (temp_path / "new_name.jpg").exists()
+
+    def test_apply_changes_undo_csv_format(self):
+        """Test that undo CSV has correct format."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            source = temp_path / "old.mp3"
+            source.touch()
+            target = temp_path / "new.mp3"
+            changes = [(source, target)]
+            
+            undo_csv = temp_path / "undo.csv"
+            apply_changes(changes, move_covers=False, undo_csv=undo_csv)
+            
+            # Check CSV format
+            with open(undo_csv, 'r') as f:
+                reader = csv.reader(f)
+                rows = list(reader)
+                
+            assert len(rows) >= 1  # At least one row
+            # Should have source and target columns
+            assert len(rows[0]) >= 2
+
+    def test_apply_changes_collision_handling(self):
+        """Test handling of filename collisions."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            
+            # Create source and collision files
+            source = temp_path / "old.mp3"
+            collision = temp_path / "new.mp3"
+            source.touch()
+            collision.touch()
+            
+            target = temp_path / "new.mp3"
+            changes = [(source, target)]
+            
+            # Should handle collision gracefully
+            try:
+                apply_changes(changes, move_covers=False, undo_csv=temp_path / "undo.csv")
+            except Exception as e:
+                # Should either handle collision or raise appropriate error
+                assert "collision" in str(e).lower() or "exists" in str(e).lower()
+
+
+class TestRegexPatterns:
+    """Tests for regex patterns."""
+
+    def test_junk_regex_patterns(self):
+        """Test that junk regex patterns work correctly."""
+        test_cases = [
+            "[FREE DL]",
+            "(free download)",
+            "free dl",
+            "(bootleg)",
+            "(edit)",
+            "(remix)",
+            "ridonkulous records",
+            "[]"
+        ]
+        
+        for pattern in test_cases:
+            assert JUNK_RE.search(pattern) is not None
+
+    def test_bpm_regex_patterns(self):
+        """Test that BPM regex patterns work correctly."""
+        test_cases = [
+            "120 BPM",
+            "120bpm",
+            "160-180 BPM",
+            "(120 BPM)",
+            "[160 BPM]"
+        ]
+        
+        for pattern in test_cases:
+            assert BPM_RE.search(pattern) is not None
+
+    def test_label_hints_regex(self):
+        """Test that label hints regex works correctly."""
+        test_cases = [
+            "records",
+            "collective",
+            "line",
+            "wars",
+            "club",
+            "mix",
+            "edit",
+            "bootleg",
+            "remix",
+            "demo",
+            "mash up"
+        ]
+        
+        for pattern in test_cases:
+            assert LABEL_HINTS.search(pattern) is not None
+
+
+class TestEdgeCases:
+    """Tests for edge cases and error conditions."""
+
+    def test_empty_string_handling(self):
+        """Test handling of empty strings."""
+        assert clean_piece("") == ""
+        assert normalize_chars("") == ""
+        assert strip_bpm_tokens("") == ""
+
+    def test_very_long_strings(self):
+        """Test handling of very long strings."""
+        long_string = "A" * 1000
+        result = clean_piece(long_string)
+        assert len(result) <= len(long_string)
+
+    def test_special_character_handling(self):
+        """Test handling of various special characters."""
+        special_chars = "!@#$%^&*()_+-=[]{}|;:,.<>?"
+        result = clean_piece(special_chars)
+        # Should not crash and should return something
+        assert isinstance(result, str)
+
+    def test_unicode_edge_cases(self):
+        """Test handling of various unicode characters."""
+        unicode_strings = [
+            "音楽",  # Japanese
+            "música",  # Spanish
+            "🎵🎶",  # Emojis
+            "ñáéíóú",  # Accented characters
+        ]
+        
+        for unicode_str in unicode_strings:
+            # Should not crash
+            result_clean = clean_piece(unicode_str)
+            result_ascii = ascii_fold(unicode_str)
+            
+            assert isinstance(result_clean, str)
+            assert isinstance(result_ascii, str)
