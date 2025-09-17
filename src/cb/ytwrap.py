@@ -1,10 +1,11 @@
 # cb/ytwrap.py
 from __future__ import annotations
-import subprocess
+
 import shlex
-from pathlib import Path
+import subprocess
 from itertools import islice
-from typing import Iterable, Optional, List, Dict
+from pathlib import Path
+from typing import Dict, Iterable, List, Optional
 
 
 def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
@@ -13,7 +14,9 @@ def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
 
 
 def print_lines(cmd: List[str]) -> Iterable[str]:
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
+    p = subprocess.Popen(
+        cmd, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True
+    )
     for line in p.stdout:
         yield line.strip()
     p.wait()
@@ -22,7 +25,9 @@ def print_lines(cmd: List[str]) -> Iterable[str]:
 def duration_map(urls: Iterable[str]) -> dict[str, float]:
     out: Dict[str, float] = {}
     for u in urls:
-        for line in print_lines(["yt-dlp", "--skip-download", "--print", "%(duration)s", u]):
+        for line in print_lines(
+            ["yt-dlp", "--skip-download", "--print", "%(duration)s", u]
+        ):
             try:
                 out[u] = float(line)
             except Exception:
@@ -30,9 +35,17 @@ def duration_map(urls: Iterable[str]) -> dict[str, float]:
     return out
 
 
-def fetch(url: str, out_template: str, audio_fmt="mp3", quality="0",
-          embed=True, add_meta=True, write_thumb=False, convert_jpg=True,
-          parse_meta=True) -> int:
+def fetch(
+    url: str,
+    out_template: str,
+    audio_fmt="mp3",
+    quality="0",
+    embed=True,
+    add_meta=True,
+    write_thumb=False,
+    convert_jpg=True,
+    parse_meta=True,
+) -> int:
     cmd = ["yt-dlp", "-x", "--audio-format", audio_fmt, "--audio-quality", quality]
     if embed:
         cmd += ["--embed-metadata", "--embed-thumbnail"]
@@ -45,16 +58,28 @@ def fetch(url: str, out_template: str, audio_fmt="mp3", quality="0",
     if parse_meta:
         # singles-style: only artist + date
         cmd += [
-            "--parse-metadata", "%(uploader|uploader_id)s:%(artist)s",
-            "--parse-metadata", "%(upload_date>%Y-%m-%d)s:%(date)s",
+            "--parse-metadata",
+            "%(uploader|uploader_id)s:%(artist)s",
+            "--parse-metadata",
+            "%(upload_date>%Y-%m-%d)s:%(date)s",
         ]
     cmd += ["-o", out_template, url]
     return run(cmd)
 
 
-def fetch_many(urls: List[str], out_template: str, audio_fmt="mp3", quality="0",
-               embed=True, add_meta=True, write_thumb=False, convert_jpg=True,
-               parse_meta=True, max_seconds: int | None = None, dry: bool = False) -> int:
+def fetch_many(
+    urls: List[str],
+    out_template: str,
+    audio_fmt="mp3",
+    quality="0",
+    embed=True,
+    add_meta=True,
+    write_thumb=False,
+    convert_jpg=True,
+    parse_meta=True,
+    max_seconds: int | None = None,
+    dry: bool = False,
+) -> int:
     if max_seconds is not None:
         dmap = duration_map(urls)
         urls = [u for u in urls if 0 < dmap.get(u, 0) < max_seconds]
@@ -64,15 +89,29 @@ def fetch_many(urls: List[str], out_template: str, audio_fmt="mp3", quality="0",
         return 0
     rc = 0
     for u in urls:
-        rc = fetch(u, out_template, audio_fmt, quality, embed, add_meta,
-                   write_thumb, convert_jpg, parse_meta) or rc
+        rc = (
+            fetch(
+                u,
+                out_template,
+                audio_fmt,
+                quality,
+                embed,
+                add_meta,
+                write_thumb,
+                convert_jpg,
+                parse_meta,
+            )
+            or rc
+        )
     return rc
 
 
 # ---- Search & cluster helpers ----
 
 
-def sc_search_urls(query: str, kind: str = "tracks", max_results: int = 20) -> List[str]:
+def sc_search_urls(
+    query: str, kind: str = "tracks", max_results: int = 20
+) -> List[str]:
     """
     Use yt-dlp's SoundCloud search extractor: scsearchN:QUERY plus optional type.
     kind: 'tracks' (default), 'sets', 'users'
@@ -84,12 +123,14 @@ def sc_search_urls(query: str, kind: str = "tracks", max_results: int = 20) -> L
         qualifier = " type:users"
     n = max(1, int(max_results or 20))
     q = f"scsearch{n}:{query}{qualifier}"
-    return list(islice(print_lines(["yt-dlp", "--flat-playlist", "--print",
-                                    "%(url)s", q]), n))
+    return list(
+        islice(print_lines(["yt-dlp", "--flat-playlist", "--print", "%(url)s", q]), n)
+    )
 
 
-def sc_search_url_title_pairs(query: str, kind: str = "tracks",
-                              max_results: int = 20) -> List[tuple[str, str]]:
+def sc_search_url_title_pairs(
+    query: str, kind: str = "tracks", max_results: int = 20
+) -> List[tuple[str, str]]:
     # also get uploader to use for clustering
     qualifier = ""
     if kind == "sets":
@@ -99,8 +140,9 @@ def sc_search_url_title_pairs(query: str, kind: str = "tracks",
     n = max(1, int(max_results or 20))
     q = f"scsearch{n}:{query}{qualifier}"
     pairs: List[tuple[str, str]] = []
-    for line in print_lines(["yt-dlp", "--flat-playlist", "--print",
-                             "%(url)s\t%(uploader_id|uploader)s", q]):
+    for line in print_lines(
+        ["yt-dlp", "--flat-playlist", "--print", "%(url)s\t%(uploader_id|uploader)s", q]
+    ):
         if "\t" in line:
             url, uploader = line.split("\t", 1)
             pairs.append((url, uploader))

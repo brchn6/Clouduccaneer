@@ -1,12 +1,13 @@
 """Simple tests for renamer functionality."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from cb.renamer import (
-    normalize_chars, strip_bpm_tokens, guess_artist_title, 
-    plan_renames, apply_changes, clean_piece, ascii_fold
-)
+from unittest.mock import MagicMock, patch
+
+import pytest
+
+from cb.renamer import (apply_changes, ascii_fold, clean_piece,
+                        guess_artist_title, normalize_chars, plan_renames,
+                        strip_bpm_tokens)
 
 
 class TestBasicRenamerFunctions:
@@ -18,7 +19,7 @@ class TestBasicRenamerFunctions:
         assert "$" not in result
 
     def test_strip_bpm_tokens(self):
-        """Test BPM token removal.""" 
+        """Test BPM token removal."""
         result = strip_bpm_tokens("Song Title 120 BPM")
         assert "BPM" not in result
 
@@ -40,14 +41,14 @@ class TestBasicRenamerFunctions:
         # The function may include the extension
         assert "Title" in title
 
-    @patch('pathlib.Path.glob')
+    @patch("pathlib.Path.glob")
     def test_plan_renames(self, mock_glob):
         """Test rename planning."""
         mock_path = MagicMock()
         mock_path.suffix = ".mp3"
         mock_path.name = "01 - Artist - Title.mp3"
         mock_glob.return_value = [mock_path]
-        
+
         root = Path("/test")
         renames = plan_renames(root, ascii_only=True, keep_track=True)
         assert isinstance(renames, list)
