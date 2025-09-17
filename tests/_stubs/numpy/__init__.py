@@ -86,7 +86,9 @@ class ndarray:
 
     def __truediv__(self, other):
         if isinstance(other, ndarray):
-            return ndarray(a / float(b) if b else 0.0 for a, b in zip(self._data, other._data))
+            return ndarray(
+                a / float(b) if b else 0.0 for a, b in zip(self._data, other._data)
+            )
         return ndarray(a / float(other) if other else 0.0 for a in self._data)
 
     # Convenience helpers ------------------------------------------------
@@ -95,6 +97,7 @@ class ndarray:
 
 
 # Constructors -------------------------------------------------------------
+
 
 def array(values: Iterable[float] | float | int) -> ndarray:
     if isinstance(values, ndarray):
@@ -144,6 +147,7 @@ def linspace(start: float, stop: float, num: int) -> ndarray:
 
 
 # Statistics ---------------------------------------------------------------
+
 
 def abs(values: ndarray | Iterable[float]) -> ndarray:
     arr = values if isinstance(values, ndarray) else array(values)

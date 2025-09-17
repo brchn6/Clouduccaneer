@@ -105,54 +105,58 @@ class TestFetchCommand:
             assert result.exit_code == 0
             mock_fetch.assert_called_once()
 
-    @patch('cb.cli.load_config')
-    @patch('cb.cli.spotwrap.fetch')
-    def test_fetch_spotify_url_routing(self, mock_spotify_fetch, mock_load_config, runner, mock_config):
+    @patch("cb.cli.load_config")
+    @patch("cb.cli.spotwrap.fetch")
+    def test_fetch_spotify_url_routing(
+        self, mock_spotify_fetch, mock_load_config, runner, mock_config
+    ):
         """Test that Spotify URLs are routed to spotwrap.fetch instead of ytwrap.fetch."""
         mock_load_config.return_value = mock_config
-        
+
         spotify_url = "https://open.spotify.com/track/3mud2NvQpaJ1CnKLD2480P"
-        
-        with patch('cb.cli.ytwrap.fetch') as mock_ytwrap_fetch:
+
+        with patch("cb.cli.ytwrap.fetch") as mock_ytwrap_fetch:
             result = runner.invoke(app, ["fetch", spotify_url])
-            
+
             assert result.exit_code == 0
             # Should call spotdl, not yt-dlp
             mock_spotify_fetch.assert_called_once()
             mock_ytwrap_fetch.assert_not_called()
-            
+
             # Verify the correct arguments are passed
             call_args = mock_spotify_fetch.call_args
             assert call_args[0][0] == spotify_url  # URL argument
             assert "{artist} - {title}.{ext}" in call_args[0][1]  # Template format
 
-    @patch('cb.cli.load_config') 
+    @patch("cb.cli.load_config")
     def test_fetch_spotify_url_dry_run(self, mock_load_config, runner, mock_config):
         """Test that Spotify URLs show correct dry run message."""
         mock_load_config.return_value = mock_config
-        
+
         spotify_url = "https://open.spotify.com/track/3mud2NvQpaJ1CnKLD2480P"
-        
+
         result = runner.invoke(app, ["fetch", spotify_url, "--dry"])
-        
+
         assert result.exit_code == 0
         assert "[DRY] would fetch spotify:" in result.stdout
         assert spotify_url in result.stdout
 
-    @patch('cb.cli.load_config')
-    @patch('cb.cli.spotwrap.fetch')
-    def test_fetch_spotify_uri_normalization(self, mock_spotify_fetch, mock_load_config, runner, mock_config):
+    @patch("cb.cli.load_config")
+    @patch("cb.cli.spotwrap.fetch")
+    def test_fetch_spotify_uri_normalization(
+        self, mock_spotify_fetch, mock_load_config, runner, mock_config
+    ):
         """Test that Spotify URIs are normalized before processing."""
         mock_load_config.return_value = mock_config
-        
+
         spotify_uri = "spotify:track:3mud2NvQpaJ1CnKLD2480P"
         expected_url = "https://open.spotify.com/track/3mud2NvQpaJ1CnKLD2480P"
-        
+
         result = runner.invoke(app, ["fetch", spotify_uri])
-        
+
         assert result.exit_code == 0
         mock_spotify_fetch.assert_called_once()
-        
+
         # Verify the URI was normalized to URL format
         call_args = mock_spotify_fetch.call_args
         assert call_args[0][0] == expected_url

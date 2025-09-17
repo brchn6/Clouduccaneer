@@ -36,9 +36,10 @@ def fetch(
         if dry:
             print("[DRY] would fetch spotify:", url)
             return
-        
+
         # Use Spotify-specific destination if configured, otherwise use default
-        spotify_base = Path(dest or cfg.get("spotify", {}).get("download_dir", str(base))).expanduser()
+        spotify_dest = cfg.get("spotify", {}).get("download_dir", str(base))
+        spotify_base = Path(dest or spotify_dest).expanduser()
         spotify_base.mkdir(parents=True, exist_ok=True)
         out_template = str(spotify_base / "{artist} - {title}.{ext}")
         spotwrap.fetch(url, out_template)

@@ -44,4 +44,9 @@ class CliRunner:
         combined = stdout_text + stderr_text
         if exit_code != 0 and "Error" not in combined:
             combined += "Error\n"
-        return Result(exit_code=exit_code, stdout=combined, stderr=stderr_text, exception=exception)
+        return Result(
+            exit_code=exit_code,
+            stdout=combined,
+            stderr=stderr_text,
+            exception=exception,
+        )

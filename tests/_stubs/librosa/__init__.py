@@ -73,7 +73,9 @@ def _tempo_from_indices(peaks: Iterable[int], sample_rate: int) -> float | None:
 def _estimate_tempo(samples: np.ndarray, sample_rate: int) -> float | None:
     tempos = []
     for threshold in (0.6, 0.4, 0.8):
-        tempo = _tempo_from_indices(_find_peaks(samples, sample_rate, threshold), sample_rate)
+        tempo = _tempo_from_indices(
+            _find_peaks(samples, sample_rate, threshold), sample_rate
+        )
         if tempo:
             tempos.append(tempo)
     if not tempos:
@@ -105,6 +107,8 @@ class feature:  # noqa: N801
             max_tempo: int | None = None,
         ) -> np.ndarray:
             samples = onset_envelope if onset_envelope is not None else y
-            tempo = _estimate_tempo(np.asarray(samples) if samples is not None else np.asarray([]), sr)
+            tempo = _estimate_tempo(
+                np.asarray(samples) if samples is not None else np.asarray([]), sr
+            )
             value = tempo or 0.0
             return np.asarray([float(value)], dtype=float)
