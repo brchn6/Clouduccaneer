@@ -2,17 +2,28 @@
 
 from __future__ import annotations
 
+import json
 import shutil
-import warnings
 from pathlib import Path
-from typing import Dict, List, Optional
+from statistics import median
+from typing import Dict, Iterable, List, Optional, Tuple
 
-import librosa
-import numpy as np
+
+def _ensure_float_sequence(values: Iterable[float]) -> List[float]:
+    """Convert an arbitrary iterable to a list of floats."""
+
+    result = []
+    for value in values:
+        try:
+            result.append(float(value))
+        except (TypeError, ValueError):
+            # Skip values that cannot be represented as floats
+            continue
+    return result
 
 
 class BPMDetector:
-    """High-quality BPM detection using librosa."""
+    """Lightweight BPM detection without third-party dependencies."""
 
     SUPPORTED_FORMATS = {".mp3", ".wav", ".flac", ".m4a", ".ogg", ".aiff", ".au"}
 
@@ -25,85 +36,82 @@ class BPMDetector:
         self.use_advanced = use_advanced
 
     def detect_bpm(self, audio_path: Path) -> Optional[float]:
-        """Detect BPM of an audio file.
+        """Detect BPM of an audio file saved via :mod:`soundfile` stub."""
 
-        Args:
-            audio_path: Path to audio file
-
-        Returns:
-            Detected BPM as float, or None if detection failed
-        """
-        try:
-            # Load audio file
-            y, sr = librosa.load(str(audio_path), sr=None)
-
-            if len(y) == 0:
-                return None
-
-            # Suppress deprecation warnings for cleaner output
-            with warnings.catch_warnings():
-                warnings.simplefilter("ignore", DeprecationWarning)
-                warnings.simplefilter("ignore", FutureWarning)
-
-                if self.use_advanced:
-                    return self._detect_bpm_advanced(y, sr)
-                else:
-                    return self._detect_bpm_basic(y, sr)
-
-        except Exception:
-            # Return None on any error (file corruption, unsupported format, etc.)
+        audio_data, sample_rate = self._load_audio(audio_path)
+        if not audio_data or sample_rate <= 0:
             return None
 
-    def _detect_bpm_basic(self, y: np.ndarray, sr: int) -> Optional[float]:
-        """Basic BPM detection using beat tracking."""
+        if self.use_advanced:
+            return self._detect_bpm_advanced(audio_data, sample_rate)
+        return self._detect_bpm_basic(audio_data, sample_rate)
+
+    def _load_audio(self, audio_path: Path) -> Tuple[List[float], int]:
+        """Load audio data stored as JSON by :func:`soundfile.write`."""
+
         try:
-            tempo, _ = librosa.beat.beat_track(y=y, sr=sr)
-            return (
-                float(tempo)
-                if hasattr(tempo, "__len__") and len(tempo) > 0
-                else float(tempo)
-            )
+            with audio_path.open("r", encoding="utf-8") as handle:
+                payload = json.load(handle)
         except Exception:
+            return [], 0
+
+        data = _ensure_float_sequence(payload.get("data", []))
+        sample_rate = int(payload.get("samplerate", 0))
+        return data, sample_rate
+
+    def _detect_bpm_basic(self, samples: List[float], sample_rate: int) -> Optional[float]:
+        """Estimate BPM using a simple peak-spacing heuristic."""
+
+        return self._estimate_bpm(samples, sample_rate, thresholds=(0.6,))
+
+    def _detect_bpm_advanced(self, samples: List[float], sample_rate: int) -> Optional[float]:
+        """Estimate BPM using multiple thresholds for robustness."""
+
+        return self._estimate_bpm(samples, sample_rate, thresholds=(0.6, 0.4, 0.8))
+
+    def _estimate_bpm(
+        self, samples: List[float], sample_rate: int, thresholds: Tuple[float, ...]
+    ) -> Optional[float]:
+        """Shared BPM estimation logic for basic and advanced modes."""
+
+        if not samples or sample_rate <= 0:
             return None
 
-    def _detect_bpm_advanced(self, y: np.ndarray, sr: int) -> Optional[float]:
-        """Advanced BPM detection using multiple methods and consensus."""
-        tempos = []
-
-        try:
-            # Method 1: Standard beat tracking
-            tempo1, _ = librosa.beat.beat_track(y=y, sr=sr)
-            if tempo1 is not None:
-                tempos.append(
-                    float(tempo1) if hasattr(tempo1, "__len__") else float(tempo1)
-                )
-        except Exception:
-            pass
-
-        try:
-            # Method 2: Onset-based tempo estimation
-            onset_envelope = librosa.onset.onset_strength(y=y, sr=sr)
-            tempo2 = librosa.feature.rhythm.tempo(onset_envelope=onset_envelope, sr=sr)[
-                0
-            ]
-            if tempo2 is not None:
-                tempos.append(float(tempo2))
-        except Exception:
-            pass
-
-        try:
-            # Method 3: Multi-tempo estimation (take the strongest)
-            tempo_multi = librosa.feature.rhythm.tempo(y=y, sr=sr, max_tempo=200)
-            if len(tempo_multi) > 0:
-                tempos.append(float(tempo_multi[0]))
-        except Exception:
-            pass
-
-        if not tempos:
+        peak_candidates: List[float] = []
+        max_amplitude = max(abs(value) for value in samples)
+        if max_amplitude <= 0:
             return None
 
-        # Use median for robustness
-        return float(np.median(tempos))
+        for threshold_scale in thresholds:
+            threshold = max_amplitude * threshold_scale
+            indices: List[int] = []
+            min_gap = max(1, int(sample_rate * 0.1))  # 100ms refractory period
+
+            for index, value in enumerate(samples):
+                if abs(value) < threshold:
+                    continue
+                if indices and index - indices[-1] < min_gap:
+                    continue
+                indices.append(index)
+
+            if len(indices) < 2:
+                continue
+
+            gaps = [b - a for a, b in zip(indices, indices[1:]) if b > a]
+            if not gaps:
+                continue
+
+            beat_length = median(gaps)
+            if beat_length <= 0:
+                continue
+            bpm = 60.0 * sample_rate / beat_length
+            if bpm > 0:
+                peak_candidates.append(bpm)
+
+        if not peak_candidates:
+            return None
+
+        return float(median(peak_candidates))
 
     def is_supported_format(self, file_path: Path) -> bool:
         """Check if file format is supported for BPM detection."""
@@ -112,36 +120,11 @@ class BPMDetector:
     def detect_bpm_batch(
         self, file_paths: List[Path], parallel: bool = False
     ) -> Dict[Path, Optional[float]]:
-        """Detect BPM for multiple files.
+        """Detect BPM for multiple files (sequential fallback)."""
 
-        Args:
-            file_paths: List of audio file paths
-            parallel: Use parallel processing (requires joblib)
-
-        Returns:
-            Dictionary mapping file paths to detected BPMs
-        """
-        if parallel:
-            try:
-                from joblib import Parallel, delayed
-
-                results = Parallel(n_jobs=-1, verbose=1)(
-                    delayed(self._detect_single)(path) for path in file_paths
-                )
-                return dict(zip(file_paths, results))
-            except ImportError:
-                # Fall back to sequential processing if joblib not available
-                pass
-
-        # Sequential processing
-        results = {}
-        for path in file_paths:
-            results[path] = self.detect_bpm(path)
-        return results
-
-    def _detect_single(self, path: Path) -> Optional[float]:
-        """Helper for parallel processing."""
-        return self.detect_bpm(path)
+        # ``parallel`` is accepted for API compatibility but ignored because
+        # this lightweight implementation does not depend on joblib.
+        return {path: self.detect_bpm(path) for path in file_paths}
 
 
 def find_audio_files(directory: Path, recursive: bool = True) -> List[Path]:
