@@ -17,15 +17,6 @@ app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify do
 
 
 @app.command()
-def fetch(url: str,
-          dest: Path = typer.Option(None, "--dest", help="Destination directory"),
-          limit_seconds: int = typer.Option(None, "--max-seconds", 
-                                           help="Skip tracks longer than this"),
-          dry: bool = typer.Option(False, "--dry", help="Print what would be done")):
-    """Download a playlist/track/user/likes/reposts with yt-dlp using sane defaults.
-    
-    Automatically detects Spotify URLs and uses spotdl instead of yt-dlp for DRM-protected content.
-    """
 def fetch(
     url: str,
     dest: Path = typer.Option(None, "--dest", help="Destination directory"),
