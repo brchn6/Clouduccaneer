@@ -19,10 +19,27 @@ def fetch(url: str,
           limit_seconds: int = typer.Option(None, "--max-seconds", 
                                            help="Skip tracks longer than this"),
           dry: bool = typer.Option(False, "--dry", help="Print what would be done")):
-    """Download a playlist/track/user/likes/reposts with yt-dlp using sane defaults."""
+    """Download a playlist/track/user/likes/reposts with yt-dlp using sane defaults.
+    
+    Automatically detects Spotify URLs and uses spotdl instead of yt-dlp for DRM-protected content.
+    """
     cfg = load_config()
     base = Path(dest or cfg["download_dir"]).expanduser()
     base.mkdir(parents=True, exist_ok=True)
+
+    # Check if this is a Spotify URL and route to spotdl
+    if spotwrap.validate_spotify_url(url):
+        url = spotwrap.normalize_spotify_url(url)
+        if dry:
+            print("[DRY] would fetch spotify:", url)
+            return
+        
+        # Use Spotify-specific destination if configured, otherwise use default
+        spotify_base = Path(dest or cfg.get("spotify", {}).get("download_dir", str(base))).expanduser()
+        spotify_base.mkdir(parents=True, exist_ok=True)
+        out_template = str(spotify_base / "{artist} - {title}.{ext}")
+        spotwrap.fetch(url, out_template)
+        return
 
     # When limiting by duration, enumerate track urls first
     if limit_seconds is not None:
