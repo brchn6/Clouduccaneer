@@ -24,3 +24,6 @@ include = ["cb*"]
 # If you have package data:
 [tool.setuptools.package-data]
 cb = ["data/**/*"]   # only if you moved your data into src/cb/data
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]

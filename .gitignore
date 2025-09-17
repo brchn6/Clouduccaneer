@@ -12,3 +12,4 @@ htmlcov/
 build/
 dist/
 test_report.html
+.coverage
