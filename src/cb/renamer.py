@@ -25,24 +25,23 @@ from typing import Iterable, List, Tuple
 
 # remove common junk phrases (case-insensitive)
 JUNK_PATTERNS = [
-    r'\[?\s*free\s*dl\s*\]?',
-    r'\[?\s*free\s*download\s*\]?',
-    r'\(?\s*free\s*dl\s*\)?',
-    r'\(?\s*bootleg\s*\)?',
-    r'\(?\s*edit\s*\)?',
-    r'\(?\s*remix\s*\)?',
-    r'\(?\s*demo\s*\)?',
-    r'\s*-\s*ridonkulous\s*records',
-    r'\s*-\s*beatroot\s*records',
-    r'\s*-\s*the\s*donkline',
-    r'\[\s*\]',  # explicit empty brackets
+    r"\[?\s*free\s*dl\s*\]?",
+    r"\[?\s*free\s*download\s*\]?",
+    r"\(?\s*free\s*dl\s*\)?",
+    r"\(?\s*bootleg\s*\)?",
+    r"\(?\s*edit\s*\)?",
+    r"\(?\s*remix\s*\)?",
+    r"\(?\s*demo\s*\)?",
+    r"\s*-\s*ridonkulous\s*records",
+    r"\s*-\s*beatroot\s*records",
+    r"\s*-\s*the\s*donkline",
+    r"\[\s*\]",  # explicit empty brackets
 ]
 JUNK_RE = re.compile("|".join(f"(?:{p})" for p in JUNK_PATTERNS), re.I)
 
 # label-ish trailing chunk after last dash
 LABEL_HINTS = re.compile(
-    r'(records?|collective|line|wars|club|mix|edit|bootleg|remix|demo|mash\s*up)',
-    re.I
+    r"(records?|collective|line|wars|club|mix|edit|bootleg|remix|demo|mash\s*up)", re.I
 )
 
 # 160 BPM / 120bpm / 160-180 BPM
@@ -55,37 +54,38 @@ BPM_RE = re.compile(
 )
 
 # words that are entirely caps (2+ letters)
-UPPERWORD_RE = re.compile(r'\b[A-Z]{2,}\b')
+UPPERWORD_RE = re.compile(r"\b[A-Z]{2,}\b")
 
 SAFE_REPLACE = [
-    (r'[\\/:*?"<>|]', '_'),  # filesystem-invalid
-    (r'\s+', ' '),
-    (r'\s+$', ''),
-    (r'^\s+', ''),
+    (r'[\\/:*?"<>|]', "_"),  # filesystem-invalid
+    (r"\s+", " "),
+    (r"\s+$", ""),
+    (r"^\s+", ""),
 ]
 
-AUDIO_EXTS = ('.mp3', '.m4a', '.flac', '.ogg', '.wav')
+AUDIO_EXTS = (".mp3", ".m4a", ".flac", ".ogg", ".wav")
 
 
 # -----------------------------
 # Normalization functions
 # -----------------------------
 
+
 def normalize_chars(s: str) -> str:
     # $ -> s
-    s = s.replace('$', 's')
+    s = s.replace("$", "s")
     # drop exclamation marks
-    s = s.replace('!', '')
+    s = s.replace("!", "")
     # collapse underscores/dashes/spaces runs
-    s = re.sub(r'[ _\-]{2,}', ' ', s)
-    s = re.sub(r'\s{2,}', ' ', s)
+    s = re.sub(r"[ _\-]{2,}", " ", s)
+    s = re.sub(r"\s{2,}", " ", s)
     return s.strip()
 
 
 def strip_bpm_tokens(s: str) -> str:
-    s = BPM_RE.sub('', s)
-    s = re.sub(r'\bBPM\b', '', s, flags=re.I)  # dangling BPM
-    return re.sub(r'\s{2,}', ' ', s).strip(' -_.')
+    s = BPM_RE.sub("", s)
+    s = re.sub(r"\bBPM\b", "", s, flags=re.I)  # dangling BPM
+    return re.sub(r"\s{2,}", " ", s).strip(" -_.")
 
 
 def normalize_caps_allcaps_to_lower(s: str) -> str:
@@ -95,23 +95,22 @@ def normalize_caps_allcaps_to_lower(s: str) -> str:
 
 def strip_brackets_and_parens(s: str) -> str:
     # kill explicit empty []
-    s = re.sub(r'\[\s*\]', '', s)
+    s = re.sub(r"\[\s*\]", "", s)
     # remove brackets/parens that carry no letters/digits (pure punctuation)
-    s = re.sub(r'\((?:\s|[^\w])*\)', '', s)
-    s = re.sub(r'\[(?:\s|[^\w])*\]', '', s)
-    s = re.sub(r'\{(?:\s|[^\w])*\}', '', s)
+    s = re.sub(r"\((?:\s|[^\w])*\)", "", s)
+    s = re.sub(r"\[(?:\s|[^\w])*\]", "", s)
+    s = re.sub(r"\{(?:\s|[^\w])*\}", "", s)
     # remove stray bracket chars
-    s = re.sub(r'[\[\]{}()]+', '', s)
+    s = re.sub(r"[\[\]{}()]+", "", s)
     return s
 
 
 def ascii_fold(s: str) -> str:
     try:
         import unicodedata
+
         return (
-            unicodedata.normalize('NFKD', s)
-            .encode('ascii', 'ignore')
-            .decode('ascii')
+            unicodedata.normalize("NFKD", s).encode("ascii", "ignore").decode("ascii")
         )
     except Exception:
         return s
@@ -121,6 +120,7 @@ def ascii_fold(s: str) -> str:
 # Core cleaning
 # -----------------------------
 
+
 def clean_piece(s: str) -> str:
     """Clean a segment (artist or title) aggressively but safely."""
     s = JUNK_RE.sub("", s)
@@ -128,12 +128,12 @@ def clean_piece(s: str) -> str:
     s = strip_bpm_tokens(s)
     s = normalize_chars(s)
     s = normalize_caps_allcaps_to_lower(s)
-    s = re.sub(r'\s+', ' ', s).strip(' -_.\t')
+    s = re.sub(r"\s+", " ", s).strip(" -_.\t")
     return s
 
 
 def split_dash_parts(name: str) -> List[str]:
-    return [p.strip() for p in name.split(' - ') if p.strip()]
+    return [p.strip() for p in name.split(" - ") if p.strip()]
 
 
 def drop_trailing_labelish(parts: List[str]) -> List[str]:
@@ -153,7 +153,7 @@ def collapse_duplicate_artist(parts: List[str]) -> List[str]:
 
 def remove_track_prefix_in_title(s: str) -> str:
     # titles like "Track 09 - Stormerr!" → "Stormerr!"
-    return re.sub(r'^\s*track\s*\d+\s*-\s*', '', s, flags=re.I)
+    return re.sub(r"^\s*track\s*\d+\s*-\s*", "", s, flags=re.I)
 
 
 def guess_artist_title(basename: str) -> Tuple[str, str, str]:
@@ -170,7 +170,7 @@ def guess_artist_title(basename: str) -> Tuple[str, str, str]:
     name = basename
 
     # leading track number
-    m = re.match(r'^\s*(\d{1,3})\s*-\s*(.*)$', name)
+    m = re.match(r"^\s*(\d{1,3})\s*-\s*(.*)$", name)
     if m:
         trackno, name = m.group(1), m.group(2)
 
@@ -211,16 +211,22 @@ def safe_filename(s: str, ascii_only: bool) -> str:
     return s.strip()
 
 
-def build_new_name(trackno: str, artist: str, title: str, ext: str, keep_track: bool = True) -> str:
+def build_new_name(
+    trackno: str, artist: str, title: str, ext: str, keep_track: bool = True
+) -> str:
     prefix = f"{int(trackno):02d} - " if (keep_track and trackno.isdigit()) else ""
-    stem = f"{prefix}{artist} - {title}" if (artist and title) else f"{prefix}{title or 'track'}"
+    stem = (
+        f"{prefix}{artist} - {title}"
+        if (artist and title)
+        else f"{prefix}{title or 'track'}"
+    )
     # normalize any double spaces/hyphens again
-    stem = re.sub(r'\s{2,}', ' ', stem).strip()
+    stem = re.sub(r"\s{2,}", " ", stem).strip()
     return f"{stem}.{ext.lower()}"
 
 
 def pair_image(old: Path) -> Path | None:
-    for ext in ('.jpg', '.jpeg', '.png', '.webp'):
+    for ext in (".jpg", ".jpeg", ".png", ".webp"):
         cand = old.with_suffix(ext)
         if cand.exists():
             return cand
@@ -231,16 +237,21 @@ def pair_image(old: Path) -> Path | None:
 # Public API
 # -----------------------------
 
-def plan_renames(root: Path, ascii_only: bool, keep_track: bool) -> List[tuple[Path, Path]]:
+
+def plan_renames(
+    root: Path, ascii_only: bool, keep_track: bool
+) -> List[tuple[Path, Path]]:
     """Return list of (old_path, new_path) actions under root."""
     audios: Iterable[Path] = (
-        p for p in root.rglob('*') if p.is_file() and p.suffix.lower() in AUDIO_EXTS
+        p for p in root.rglob("*") if p.is_file() and p.suffix.lower() in AUDIO_EXTS
     )
     changes: List[tuple[Path, Path]] = []
     for p in audios:
         base = clean_piece(p.stem)
         trackno, artist, title = guess_artist_title(base)
-        new_name = build_new_name(trackno, artist, title, p.suffix[1:], keep_track=keep_track)
+        new_name = build_new_name(
+            trackno, artist, title, p.suffix[1:], keep_track=keep_track
+        )
         new_name = safe_filename(new_name, ascii_only)
         target = p.with_name(new_name)
 
@@ -258,7 +269,7 @@ def plan_renames(root: Path, ascii_only: bool, keep_track: bool) -> List[tuple[P
 def apply_changes(changes: List[tuple[Path, Path]], move_covers: bool, undo_csv: Path):
     """Apply planned renames; move matching images; write undo CSV."""
     undo_csv.parent.mkdir(parents=True, exist_ok=True)
-    with undo_csv.open("w", newline='', encoding="utf-8") as f:
+    with undo_csv.open("w", newline="", encoding="utf-8") as f:
         w = csv.writer(f)
         w.writerow(["old_path", "new_path"])
         for old, new in changes:
