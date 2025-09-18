@@ -14,8 +14,8 @@ import inspect
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Dict, Iterable, List, Optional, Sequence, Tuple, Union
-from typing import get_args, get_origin, get_type_hints
+from typing import (Any, Callable, Dict, Iterable, List, Optional, Sequence,
+                    Tuple, Union, get_args, get_origin, get_type_hints)
 
 
 class Exit(Exception):
@@ -127,7 +127,9 @@ class Command:
         converter, is_path = _resolve_type(annotation)
         required = arg.default is ... or arg.default is inspect._empty
         default_value = None if required else arg.default
-        param = _Parameter(name, annotation, default_value, arg.help, "argument", is_path)
+        param = _Parameter(
+            name, annotation, default_value, arg.help, "argument", is_path
+        )
         self.parameters.append(param)
 
         kwargs: Dict[str, Any] = {"help": arg.help}
@@ -142,7 +144,9 @@ class Command:
 
     def _add_option(self, name: str, annotation: Any, opt: Option) -> None:
         converter, is_path = _resolve_type(annotation)
-        option_names = _expand_param_decls(opt.param_decls, f"--{name.replace('_', '-')}")
+        option_names = _expand_param_decls(
+            opt.param_decls, f"--{name.replace('_', '-')}"
+        )
         is_bool_option = (
             converter is bool
             or isinstance(opt.default, bool)
@@ -200,7 +204,9 @@ class Typer:
         self.help = help
         self._commands: Dict[str, Command] = {}
 
-    def command(self, name: Optional[str] = None) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
+    def command(
+        self, name: Optional[str] = None
+    ) -> Callable[[Callable[..., Any]], Callable[..., Any]]:
         def decorator(func: Callable[..., Any]) -> Callable[..., Any]:
             command_name = name or func.__name__.replace("_", "-")
             self._commands[command_name] = Command(func, command_name)
