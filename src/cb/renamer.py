@@ -28,14 +28,18 @@ JUNK_PATTERNS = [
     r"\[?\s*free\s*dl\s*\]?",
     r"\[?\s*free\s*download\s*\]?",
     r"\(?\s*free\s*dl\s*\)?",
+    r"\(?\s*free-download\s*\)?",
+    r"\{?\s*free\s*dl\s*\}?",
     r"\(?\s*bootleg\s*\)?",
     r"\(?\s*edit\s*\)?",
     r"\(?\s*remix\s*\)?",
     r"\(?\s*demo\s*\)?",
+    r"\{?\s*ext\s*\}?",
     r"\s*-\s*ridonkulous\s*records",
     r"\s*-\s*beatroot\s*records",
     r"\s*-\s*the\s*donkline",
     r"\[\s*\]",  # explicit empty brackets
+    r"[\[\{\(][^\]\}\)]*[\]\}\)]",  # anything in brackets/braces/parens
 ]
 JUNK_RE = re.compile("|".join(f"(?:{p})" for p in JUNK_PATTERNS), re.I)
 
@@ -76,9 +80,14 @@ def normalize_chars(s: str) -> str:
     s = s.replace("$", "s")
     # drop exclamation marks
     s = s.replace("!", "")
-    # collapse underscores/dashes/spaces runs
+    # preserve single ' - ' between words, but collapse runs elsewhere
+    # temporarily replace ' - ' with a unique token
+    s = s.replace(" - ", "<DASH>")
+    # collapse underscores/dashes/spaces runs (except our token)
     s = re.sub(r"[ _\-]{2,}", " ", s)
     s = re.sub(r"\s{2,}", " ", s)
+    # restore the single dash separator
+    s = s.replace("<DASH>", " - ")
     return s.strip()
 
 
