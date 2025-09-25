@@ -110,13 +110,14 @@ class BPMDetector:
         return file_path.suffix.lower() in self.SUPPORTED_FORMATS
 
     def detect_bpm_batch(
-        self, file_paths: List[Path], parallel: bool = False
+        self, file_paths: List[Path], parallel: bool = False, n_jobs: int = -1
     ) -> Dict[Path, Optional[float]]:
         """Detect BPM for multiple files.
 
         Args:
             file_paths: List of audio file paths
             parallel: Use parallel processing (requires joblib)
+            n_jobs: Number of parallel jobs (-1 = all cores)
 
         Returns:
             Dictionary mapping file paths to detected BPMs
@@ -125,7 +126,7 @@ class BPMDetector:
             try:
                 from joblib import Parallel, delayed
 
-                results = Parallel(n_jobs=-1, verbose=1)(
+                results = Parallel(n_jobs=n_jobs, verbose=1)(
                     delayed(self._detect_single)(path) for path in file_paths
                 )
                 return dict(zip(file_paths, results))
@@ -299,3 +300,55 @@ def add_bpm_to_tags(file_path: Path, bpm: float) -> bool:
 
     except Exception:
         return False
+
+
+def analyze_bpm_batch(
+    targets: List[Path],
+    parallel: bool = False,
+    n_jobs: int = -1,
+    advanced: bool = True,
+    recursive: bool = True,
+    add_to_filename: bool = False,
+    add_to_tags: bool = False,
+    backup: bool = True,
+) -> Dict[Path, Optional[float]]:
+    """Analyze BPM for multiple audio files or directories.
+
+    Args:
+        targets: List of file or directory paths
+        parallel: Use parallel processing for multiple files
+        n_jobs: Number of parallel jobs (-1 = all cores)
+        advanced: Use advanced multi-method detection
+        recursive: Search recursively in directories
+        add_to_filename: Add BPM to filename
+        add_to_tags: Add BPM to file metadata tags
+        backup: Create backup when modifying files
+
+    Returns:
+        Dictionary mapping file paths to detected BPMs
+    """
+    detector = BPMDetector(use_advanced=advanced)
+
+    # Collect all audio files from targets
+    all_files = []
+    for target in targets:
+        if target.is_file() and detector.is_supported_format(target):
+            all_files.append(target)
+        elif target.is_dir():
+            all_files.extend(find_audio_files(target, recursive=recursive))
+
+    if not all_files:
+        return {}
+
+    # Detect BPM for all files
+    results = detector.detect_bpm_batch(all_files, parallel=parallel, n_jobs=n_jobs)
+
+    # Apply filename/tag modifications if requested
+    for file_path, bpm in results.items():
+        if bpm is not None:
+            if add_to_filename:
+                add_bpm_to_filename(file_path, bpm, backup=backup)
+            if add_to_tags:
+                add_bpm_to_tags(file_path, bpm)
+
+    return results

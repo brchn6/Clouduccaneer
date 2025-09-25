@@ -294,3 +294,58 @@ def apply_changes(changes: List[tuple[Path, Path]], move_covers: bool, undo_csv:
                     shutil.move(str(img), str(new_img))
             shutil.move(str(old), str(new))
             w.writerow([str(old), str(new)])
+
+
+def normalize_for_dedupe(artist: str, title: str) -> str:
+    """Return a normalized key for deduplication: lowercase, no spaces/punct, no trackno."""
+    key = f"{artist} - {title}"
+    key = re.sub(r"[^a-z0-9]+", "", key.lower())
+    return key
+
+
+def strip_leading_number(name: str) -> str:
+    """Remove leading number (with or without dash/space) from a string."""
+    return re.sub(r"^\s*0*\d{1,3}(\s*-)?\s*", "", name)
+
+
+def plan_cleanup_numbers_and_merge(
+    root: Path, ascii_only: bool
+) -> List[tuple[Path, Path]]:
+    """Return list of (old_path, new_path) actions under root, removing track numbers
+    and merging duplicates."""
+    audios: Iterable[Path] = (
+        p for p in root.rglob("*")
+        if p.is_file() and p.suffix.lower() in AUDIO_EXTS
+    )
+    seen = {}
+    changes: List[tuple[Path, Path]] = []
+    for p in audios:
+        base = clean_piece(p.stem)
+        # Remove any leading number, dash, or space
+        base = strip_leading_number(base)
+        _, artist, title = guess_artist_title(base)  # ignore trackno
+        # Also strip leading number from artist and title for extra safety
+        artist = strip_leading_number(artist)
+        title = strip_leading_number(title)
+        norm_key = normalize_for_dedupe(artist, title)
+        new_name = build_new_name("", artist, title, p.suffix[1:], keep_track=False)
+        new_name = safe_filename(new_name, ascii_only)
+        target = p.with_name(new_name)
+
+        # If we've already seen this normalized name, pick the larger file
+        if norm_key in seen:
+            prev = seen[norm_key]
+            # Keep the larger file (by size)
+            if p.stat().st_size > prev.stat().st_size:
+                bak = prev.with_name(prev.stem + ".bak" + prev.suffix)
+                changes.append((prev, bak))
+                changes.append((p, target))
+                seen[norm_key] = p
+            else:
+                bak = p.with_name(p.stem + ".bak" + p.suffix)
+                changes.append((p, bak))
+        else:
+            if target.name != p.name:
+                changes.append((p, target))
+            seen[norm_key] = p
+    return changes

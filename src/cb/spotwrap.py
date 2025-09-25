@@ -181,7 +181,7 @@ def fetch_many(
         rc = (
             fetch(
                 u,
-                str(Path(out_dir) / "{artist} - {title}.{ext}"),
+                str(Path(out_dir) / "{artist} - {title}.{output-ext}"),
                 audio_fmt=audio_fmt,
                 quality=quality,
                 lyrics=lyrics,
@@ -226,7 +226,9 @@ def search_spotify(query: str, limit: int = 20) -> List[str]:
     Approximate search using SpotDL's search pipeline.
     Returns a list of Spotify URLs if they appear in stdout.
     """
-    cmd = _spotdl_cmd_base(user_auth=False) + ["download", "--search-query", query, "--save-file", "-"]
+    cmd = _spotdl_cmd_base(user_auth=False) + [
+        "download", "--search-query", query, "--save-file", "-"
+    ]
     try:
         result = subprocess.run(cmd, capture_output=True, text=True)
         urls: List[str] = []

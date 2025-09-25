@@ -10,7 +10,7 @@ import typer
 from . import spotwrap, ytwrap
 from .bpm import (BPMDetector, add_bpm_to_filename, add_bpm_to_tags,
                   find_audio_files, format_bpm_result)
-from .renamer import apply_changes, plan_renames
+from .renamer import apply_changes, plan_renames, plan_cleanup_numbers_and_merge
 from .utils import load_config
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
@@ -73,16 +73,27 @@ def rename(
     move_covers: bool = typer.Option(False, "--move-covers"),
     apply: bool = typer.Option(False, "--apply"),
     undo: Path = typer.Option(Path("undo_cloudbuccaneer.csv"), "--undo"),
+    cleanup_numbers: bool = typer.Option(
+        False,
+        "--cleanup-numbers",
+        help="Remove track numbers and merge duplicates by name."
+    ),
 ):
-    """Clean filenames: strip junk; guess artist/title; keep track # optionally; move covers."""
+    """Clean filenames: strip junk; guess artist/title; keep track # optionally;
+    move covers. Optionally remove track numbers and merge duplicates."""
     cfg = load_config()
     if ascii_only is None:
         ascii_only = bool(cfg["rename"].get("ascii", True))
     if keep_track is None:
         keep_track = bool(cfg["rename"].get("keep_track", True))
-    changes = plan_renames(
-        folder.expanduser(), ascii_only=ascii_only, keep_track=keep_track
-    )
+    if cleanup_numbers:
+        changes = plan_cleanup_numbers_and_merge(
+            folder.expanduser(), ascii_only=ascii_only
+        )
+    else:
+        changes = plan_renames(
+            folder.expanduser(), ascii_only=ascii_only, keep_track=keep_track
+        )
     if not changes:
         print("Nothing to change.")
         raise typer.Exit(code=0)
@@ -495,6 +506,9 @@ def bpm(
     parallel: bool = typer.Option(
         False, "--parallel", help="Use parallel processing for multiple files"
     ),
+    n_jobs: int = typer.Option(
+        -1, "--n-jobs", help="Number of parallel jobs for BPM analysis (-1 = all cores)"
+    ),
     advanced: bool = typer.Option(
         True, "--advanced/--basic", help="Use advanced multi-method detection"
     ),
@@ -514,6 +528,11 @@ def bpm(
         "--backup/--no-backup",
         help="Keep original files when exporting to filename",
     ),
+    replace: bool = typer.Option(
+        False,
+        "--replace",
+        help="Remove original file after adding BPM to filename (implies --no-backup)",
+    ),
 ):
     """Analyze audio files and detect their BPM (beats per minute)."""
     target = target.expanduser()
@@ -523,6 +542,9 @@ def bpm(
         raise typer.Exit(code=1)
 
     detector = BPMDetector(use_advanced=advanced)
+
+    if replace:
+        backup = False
 
     if target.is_file():
         # Single file processing
@@ -565,7 +587,7 @@ def bpm(
             print("Using parallel processing...")
 
         # Detect BPM for all files
-        results = detector.detect_bpm_batch(audio_files, parallel=parallel)
+        results = detector.detect_bpm_batch(audio_files, parallel=parallel, n_jobs=n_jobs)
 
         # Display results and export
         print()

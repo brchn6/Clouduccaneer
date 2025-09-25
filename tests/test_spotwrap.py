@@ -22,7 +22,7 @@ class TestRunFunction:
         result = run(["spotdl", "--version"])
 
         assert result == 0
-        mock_call.assert_called_once_with(["spotdl", "--version"], cwd=None)
+        mock_call.assert_called_once_with(["spotdl", "--version"], cwd=None, stderr=None)
 
     @patch("subprocess.call")
     def test_run_with_cwd(self, mock_call):
@@ -33,7 +33,7 @@ class TestRunFunction:
         result = run(["spotdl", "--help"], cwd=test_path)
 
         assert result == 0
-        mock_call.assert_called_once_with(["spotdl", "--help"], cwd="/tmp")
+        mock_call.assert_called_once_with(["spotdl", "--help"], cwd="/tmp", stderr=None)
 
     @patch("subprocess.call")
     def test_run_command_failure(self, mock_call):
@@ -215,12 +215,13 @@ class TestFetchMany:
         assert result == 0
         mock_fetch.assert_called_once_with(
             "https://open.spotify.com/track/1",
-            "/tmp/downloads",
-            "flac",
-            "highest",
-            False,
-            False,
-            True,  # embed_metadata default
+            "/tmp/downloads/{artist} - {title}.{output-ext}",
+            audio_fmt="flac",
+            quality="highest",
+            lyrics=False,
+            playlist_numbering=False,
+            embed_metadata=True,
+            user_auth=False,
         )
 
 
