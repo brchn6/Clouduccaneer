@@ -126,7 +126,7 @@ class TestFetchCommand:
             # Verify the correct arguments are passed
             call_args = mock_spotify_fetch.call_args
             assert call_args[0][0] == spotify_url  # URL argument
-            assert "{artist} - {title}.{ext}" in call_args[0][1]  # Template format
+            assert "{artist} - {title}.{output-ext}" in call_args[0][1]  # Template format
 
     @patch("cb.cli.load_config")
     def test_fetch_spotify_url_dry_run(self, mock_load_config, runner, mock_config):

@@ -11,7 +11,7 @@ from . import spotwrap, ytwrap
 from .bpm import (BPMDetector, add_bpm_to_filename, add_bpm_to_tags,
                   find_audio_files, format_bpm_result)
 from .renamer import apply_changes, plan_renames, plan_cleanup_numbers_and_merge
-from .utils import load_config
+from .utils import load_config, print_download_summary, print_quick_summary
 
 app = typer.Typer(help="CloudBuccaneer — fetch + fix SoundCloud and Spotify downloads")
 
@@ -41,28 +41,71 @@ def fetch(
         spotify_dest = cfg.get("spotify", {}).get("download_dir", str(base))
         spotify_base = Path(dest or spotify_dest).expanduser()
         spotify_base.mkdir(parents=True, exist_ok=True)
-        out_template = str(spotify_base / "{artist} - {title}.{ext}")
-        spotwrap.fetch(url, out_template)
+        
+        print(f"[CloudBuccaneer] Spotify download initiated")
+        print(f"  Destination: {spotify_base}")
+        
+        out_template = str(spotify_base / "{artist} - {title}.{output-ext}")
+        result = spotwrap.fetch(url, out_template)
+        
+        # Single download summary
+        print_download_summary(
+            platform="Spotify",
+            successful=1 if result == 0 else 0,
+            total=1,
+            failed_items=[url] if result != 0 else None,
+            destination=spotify_base,
+            format_info=f"mp3 @ 320k (default)"
+        )
+        
+        if result != 0:
+            raise typer.Exit(code=result)
         return
 
+    print(f"[CloudBuccaneer] SoundCloud download initiated")
+    print(f"  Destination: {base}")
+    
     # When limiting by duration, enumerate track urls first
     if limit_seconds is not None:
         urls = list(
             ytwrap.print_lines(["yt-dlp", "--flat-playlist", "--print", "%(url)s", url])
         )
-        dmap = ytwrap.duration_map(urls)
-        urls = [u for u in urls if 0 < dmap.get(u, 0) < limit_seconds]
+        print(f"[CloudBuccaneer] Found {len(urls)} tracks in playlist/collection")
+        
         if dry:
-            for u in urls:
-                print("[DRY] would fetch:", u)
+            print(f"[DRY] Would download {len(urls)} SoundCloud tracks with max duration {limit_seconds}s")
             return
-        for u in urls:
-            ytwrap.fetch(u, str(base / cfg["out_template"]))
+            
+        result = ytwrap.fetch_many(
+            urls, 
+            str(base / cfg["out_template"]), 
+            max_seconds=limit_seconds
+        )
+        
+        if result == 0:
+            print(f"[CloudBuccaneer] ✓ SoundCloud batch download completed successfully")
+        else:
+            print(f"[CloudBuccaneer] ✗ SoundCloud batch download completed with errors")
+            raise typer.Exit(code=result)
     else:
         if dry:
             print("[DRY] would fetch:", url)
             return
-        ytwrap.fetch(url, str(base / cfg["out_template"]))
+            
+        result = ytwrap.fetch(url, str(base / cfg["out_template"]))
+        
+        # Single download summary
+        print_download_summary(
+            platform="SoundCloud", 
+            successful=1 if result == 0 else 0,
+            total=1,
+            failed_items=[url] if result != 0 else None,
+            destination=base,
+            format_info="mp3 @ best quality (default)"
+        )
+        
+        if result != 0:
+            raise typer.Exit(code=result)
 
 
 @app.command()
@@ -345,9 +388,30 @@ def fetch_spotify(
         print(f"[DRY] quality: {quality}, format: {format}")
         return
 
+    print(f"[CloudBuccaneer] Spotify download initiated")
+    print(f"  Destination: {base}")
+    print(f"  Quality: {quality}, Format: {format}")
+    print(f"  Lyrics: {'enabled' if lyrics else 'disabled'}")
+
     # Use a template that works with spotdl
-    out_template = str(base / "{artist} - {title}.{ext}")
-    spotwrap.fetch(url, out_template, audio_fmt=format, quality=quality, lyrics=lyrics)
+    out_template = str(base / "{artist} - {title}.{output-ext}")
+    result = spotwrap.fetch(url, out_template, audio_fmt=format, quality=quality, lyrics=lyrics)
+    
+    # Comprehensive summary
+    print_download_summary(
+        platform="Spotify",
+        successful=1 if result == 0 else 0,
+        total=1,
+        failed_items=[url] if result != 0 else None,
+        destination=base,
+        format_info=f"{format} @ {quality}",
+        additional_info={
+            "Lyrics": "enabled" if lyrics else "disabled"
+        }
+    )
+    
+    if result != 0:
+        raise typer.Exit(code=result)
 
 
 @app.command("search-spotify")
@@ -377,8 +441,31 @@ def search_spotify(
         print(f"[DRY] destination: {base}")
         return
 
-    out_template = str(base / "{artist} - {title}.{ext}")
-    spotwrap.fetch(search_query, out_template, audio_fmt=format, quality=quality)
+    print(f"[CloudBuccaneer] Spotify search and download initiated")
+    print(f"  Query: {search_query}")
+    print(f"  Type: {type_filter}")
+    print(f"  Destination: {base}")
+    print(f"  Quality: {quality}, Format: {format}")
+
+    out_template = str(base / "{artist} - {title}.{output-ext}")
+    result = spotwrap.fetch(search_query, out_template, audio_fmt=format, quality=quality)
+    
+    # Comprehensive summary
+    print_download_summary(
+        platform="Spotify Search",
+        successful=1 if result == 0 else 0,
+        total=1,
+        failed_items=[search_query] if result != 0 else None,
+        destination=base,
+        format_info=f"{format} @ {quality}",
+        additional_info={
+            "Search query": search_query,
+            "Search type": type_filter
+        }
+    )
+    
+    if result != 0:
+        raise typer.Exit(code=result)
 
 
 @app.command()

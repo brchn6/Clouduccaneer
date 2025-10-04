@@ -10,6 +10,8 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 from urllib.parse import urlsplit, urlunsplit
 
+from .utils import print_download_summary
+
 
 # ---------------------------
 # helpers: shell + streaming
@@ -140,6 +142,16 @@ def fetch(
         return 2
 
     url = normalize_spotify_url(url)
+    
+    # Show download configuration
+    print(f"[spotwrap] Starting Spotify download:")
+    print(f"  URL: {url}")
+    print(f"  Format: {audio_fmt} @ {quality}")
+    print(f"  Output: {out_template}")
+    if lyrics:
+        print(f"  Lyrics: enabled (genius, musixmatch)")
+    if playlist_numbering:
+        print(f"  Playlist numbering: enabled")
 
     cmd = _spotdl_cmd_base(user_auth) + ["download", url]
     cmd += ["--format", audio_fmt]
@@ -153,7 +165,14 @@ def fetch(
 
     # embed_metadata: SpotDL v4 embeds by default; kept as a placeholder flag
 
-    return run(cmd, quiet_stderr=quiet_stderr)
+    result = run(cmd, quiet_stderr=quiet_stderr)
+    
+    if result == 0:
+        print(f"[spotwrap] ✓ Download completed successfully")
+    else:
+        print(f"[spotwrap] ✗ Download failed with exit code {result}")
+    
+    return result
 
 
 def fetch_many(
@@ -172,27 +191,63 @@ def fetch_many(
     Download multiple Spotify URLs with gentle throttling.
     """
     if dry:
-        for u in urls:
-            print(f"[DRY] would fetch spotify: {normalize_spotify_url(u)}")
+        print(f"[DRY] Would download {len(urls)} Spotify tracks:")
+        for i, u in enumerate(urls, 1):
+            print(f"  [{i}/{len(urls)}] {normalize_spotify_url(u)}")
         return 0
 
+    if not urls:
+        print("[spotwrap] No URLs to download")
+        return 0
+
+    print(f"[spotwrap] Starting batch download of {len(urls)} tracks")
+    print(f"[spotwrap] Configuration: {audio_fmt} @ {quality}, throttle: {throttle_seconds}s")
+    
     rc = 0
-    for i, u in enumerate(urls):
-        rc = (
-            fetch(
-                u,
-                str(Path(out_dir) / "{artist} - {title}.{output-ext}"),
-                audio_fmt=audio_fmt,
-                quality=quality,
-                lyrics=lyrics,
-                playlist_numbering=playlist_numbering,
-                embed_metadata=embed_metadata,
-                user_auth=user_auth,
-            )
-            or rc
+    success_count = 0
+    failed_urls = []
+    
+    for i, u in enumerate(urls, 1):
+        print(f"\n[spotwrap] Progress: [{i}/{len(urls)}] Processing track...")
+        
+        result = fetch(
+            u,
+            str(Path(out_dir) / "{artist} - {title}.{output-ext}"),
+            audio_fmt=audio_fmt,
+            quality=quality,
+            lyrics=lyrics,
+            playlist_numbering=playlist_numbering,
+            embed_metadata=embed_metadata,
+            user_auth=user_auth,
         )
+        
+        if result == 0:
+            success_count += 1
+        else:
+            failed_urls.append(u)
+        
+        rc = result or rc
+        
+        # Throttle between downloads (except for last item)
         if i < len(urls) - 1 and throttle_seconds > 0:
+            print(f"[spotwrap] Waiting {throttle_seconds}s before next download...")
             time.sleep(throttle_seconds)
+    
+    # Comprehensive final summary
+    print_download_summary(
+        platform="Spotify",
+        successful=success_count,
+        total=len(urls),
+        failed_items=failed_urls,
+        destination=Path(out_dir),
+        format_info=f"{audio_fmt} @ {quality}",
+        additional_info={
+            "Lyrics": "enabled" if lyrics else "disabled",
+            "Playlist numbering": "enabled" if playlist_numbering else "disabled",
+            "Throttle delay": f"{throttle_seconds}s" if throttle_seconds > 0 else "none"
+        }
+    )
+    
     return rc
 
 

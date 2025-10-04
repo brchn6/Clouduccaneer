@@ -7,6 +7,8 @@ from itertools import islice
 from pathlib import Path
 from typing import Dict, Iterable, List, Optional
 
+from .utils import print_download_summary
+
 
 def run(cmd: List[str], cwd: Optional[Path] = None) -> int:
     print("▶", " ".join(shlex.quote(c) for c in cmd))
@@ -46,6 +48,11 @@ def fetch(
     convert_jpg=True,
     parse_meta=True,
 ) -> int:
+    print(f"[ytwrap] Starting SoundCloud download:")
+    print(f"  URL: {url}")
+    print(f"  Format: {audio_fmt} @ quality {quality}")
+    print(f"  Output template: {out_template}")
+    
     cmd = ["yt-dlp", "-x", "--audio-format", audio_fmt, "--audio-quality", quality]
     if embed:
         cmd += ["--embed-metadata", "--embed-thumbnail"]
@@ -64,7 +71,15 @@ def fetch(
             "%(upload_date>%Y-%m-%d)s:%(date)s",
         ]
     cmd += ["-o", out_template, url]
-    return run(cmd)
+    
+    result = run(cmd)
+    
+    if result == 0:
+        print(f"[ytwrap] ✓ SoundCloud download completed successfully")
+    else:
+        print(f"[ytwrap] ✗ SoundCloud download failed with exit code {result}")
+    
+    return result
 
 
 def fetch_many(
@@ -80,29 +95,72 @@ def fetch_many(
     max_seconds: int | None = None,
     dry: bool = False,
 ) -> int:
+    original_count = len(urls)
+    
+    # Filter by duration if specified
     if max_seconds is not None:
+        print(f"[ytwrap] Filtering tracks by duration (<{max_seconds}s)...")
         dmap = duration_map(urls)
         urls = [u for u in urls if 0 < dmap.get(u, 0) < max_seconds]
-    if dry:
-        for u in urls:
-            print("[DRY] would fetch:", u)
+        filtered_count = len(urls)
+        if filtered_count < original_count:
+            print(f"[ytwrap] Filtered: {filtered_count}/{original_count} tracks within duration limit")
+    
+    if not urls:
+        print("[ytwrap] No tracks to download after filtering")
         return 0
+        
+    if dry:
+        print(f"[DRY] Would download {len(urls)} SoundCloud tracks:")
+        for i, u in enumerate(urls, 1):
+            print(f"  [{i}/{len(urls)}] {u}")
+        return 0
+    
+    print(f"[ytwrap] Starting SoundCloud download of {len(urls)} tracks")
+    print(f"[ytwrap] Configuration: {audio_fmt} @ quality {quality}")
+    
     rc = 0
-    for u in urls:
-        rc = (
-            fetch(
-                u,
-                out_template,
-                audio_fmt,
-                quality,
-                embed,
-                add_meta,
-                write_thumb,
-                convert_jpg,
-                parse_meta,
-            )
-            or rc
+    success_count = 0
+    failed_urls = []
+    
+    for i, u in enumerate(urls, 1):
+        print(f"\n[ytwrap] Progress: [{i}/{len(urls)}] Downloading...")
+        
+        result = fetch(
+            u,
+            out_template,
+            audio_fmt,
+            quality,
+            embed,
+            add_meta,
+            write_thumb,
+            convert_jpg,
+            parse_meta,
         )
+        
+        if result == 0:
+            success_count += 1
+        else:
+            failed_urls.append(u)
+        
+        rc = result or rc
+    
+    # Comprehensive final summary
+    print_download_summary(
+        platform="SoundCloud",
+        successful=success_count,
+        total=len(urls),
+        failed_items=failed_urls,
+        destination=Path(out_template).parent,
+        format_info=f"{audio_fmt} @ quality {quality}",
+        additional_info={
+            "Metadata embedding": "enabled" if embed else "disabled",
+            "Thumbnails": "enabled" if write_thumb else "disabled",
+            "Metadata parsing": "enabled" if parse_meta else "disabled",
+            "Original tracks requested": str(original_count) if original_count != len(urls) else None
+        }
+    )
+    
     return rc
 
 
