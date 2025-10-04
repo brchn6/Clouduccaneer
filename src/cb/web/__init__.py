@@ -1,0 +1,1 @@
+"""CloudBuccaneer Web UI module."""

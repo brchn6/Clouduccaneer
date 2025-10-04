@@ -10,6 +10,30 @@ Fetch + fix SoundCloud and Spotify downloads. Wraps `yt-dlp` for SoundCloud and 
 pip install -e .
 ```
 
+## Web UI (NEW!)
+
+CloudBuccaneer now includes a modern, clean web interface for easy access to all features!
+
+```bash
+# Start the web server
+cb web
+
+# Or specify custom host/port
+cb web --host 0.0.0.0 --port 8080
+```
+
+Then open your browser to `http://localhost:8080` to access the web interface.
+
+### Web UI Features:
+- **Download**: Download from SoundCloud and Spotify URLs with a simple form
+- **Search**: Search for tracks, playlists, or artists on SoundCloud
+- **Rename**: Clean up filenames in your music folders
+- **Clean**: Remove leftover thumbnails and temporary files
+- **BPM Detect**: Analyze audio files and detect BPM with advanced algorithms
+- **Config**: View your current CloudBuccaneer configuration
+
+The web UI provides the same powerful features as the CLI with a beautiful, intuitive interface!
+
 ## Usage 
 
 ### SoundCloud Downloads

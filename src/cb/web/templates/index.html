@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CloudBuccaneer - Music Downloader & Manager</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>☁️ CloudBuccaneer</h1>
+            <p class="subtitle">Professional Music Downloader & Manager</p>
+        </header>
+
+        <nav class="tabs">
+            <button class="tab active" data-tab="fetch">Download</button>
+            <button class="tab" data-tab="search">Search</button>
+            <button class="tab" data-tab="rename">Rename</button>
+            <button class="tab" data-tab="clean">Clean</button>
+            <button class="tab" data-tab="bpm">BPM Detect</button>
+            <button class="tab" data-tab="config">Config</button>
+        </nav>
+
+        <!-- Fetch/Download Tab -->
+        <div id="fetch" class="tab-content active">
+            <div class="card">
+                <h2>Download Music</h2>
+                <p class="description">Download from SoundCloud or Spotify URLs</p>
+                
+                <form id="fetch-form" class="form">
+                    <div class="form-group">
+                        <label for="fetch-url">URL</label>
+                        <input type="text" id="fetch-url" placeholder="https://soundcloud.com/... or https://open.spotify.com/..." required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fetch-dest">Destination (optional)</label>
+                        <input type="text" id="fetch-dest" placeholder="~/Music">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="fetch-max-seconds">Max Duration (seconds, optional)</label>
+                        <input type="number" id="fetch-max-seconds" placeholder="300">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Download</span>
+                        <span class="btn-loader" style="display: none;">⏳ Downloading...</span>
+                    </button>
+                </form>
+                
+                <div id="fetch-result" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Search Tab -->
+        <div id="search" class="tab-content">
+            <div class="card">
+                <h2>Search Music</h2>
+                <p class="description">Search for tracks, playlists, or artists on SoundCloud</p>
+                
+                <form id="search-form" class="form">
+                    <div class="form-group">
+                        <label for="search-query">Search Query</label>
+                        <input type="text" id="search-query" placeholder="Enter artist, track name..." required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="search-kind">Search Type</label>
+                        <select id="search-kind">
+                            <option value="tracks">Tracks</option>
+                            <option value="sets">Playlists</option>
+                            <option value="users">Users</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="search-max">Max Results</label>
+                        <input type="number" id="search-max" value="20" min="1" max="50">
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Search</span>
+                        <span class="btn-loader" style="display: none;">🔍 Searching...</span>
+                    </button>
+                </form>
+                
+                <div id="search-results" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Rename Tab -->
+        <div id="rename" class="tab-content">
+            <div class="card">
+                <h2>Rename Files</h2>
+                <p class="description">Clean up filenames with smart heuristics</p>
+                
+                <form id="rename-form" class="form">
+                    <div class="form-group">
+                        <label for="rename-folder">Folder Path</label>
+                        <input type="text" id="rename-folder" placeholder="~/Music/Downloads" required>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Rename Files</span>
+                        <span class="btn-loader" style="display: none;">✏️ Renaming...</span>
+                    </button>
+                </form>
+                
+                <div id="rename-result" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Clean Tab -->
+        <div id="clean" class="tab-content">
+            <div class="card">
+                <h2>Clean Folder</h2>
+                <p class="description">Remove leftover thumbnails and temporary files</p>
+                
+                <form id="clean-form" class="form">
+                    <div class="form-group">
+                        <label for="clean-folder">Folder Path</label>
+                        <input type="text" id="clean-folder" placeholder="~/Music/Downloads" required>
+                    </div>
+                    
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="clean-images" checked>
+                            Remove image files (jpg, png)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="clean-webp" checked>
+                            Remove webp thumbnails
+                        </label>
+                        <label>
+                            <input type="checkbox" id="clean-parts" checked>
+                            Remove temporary/partial files
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Clean Folder</span>
+                        <span class="btn-loader" style="display: none;">🧹 Cleaning...</span>
+                    </button>
+                </form>
+                
+                <div id="clean-result" class="result"></div>
+            </div>
+        </div>
+
+        <!-- BPM Tab -->
+        <div id="bpm" class="tab-content">
+            <div class="card">
+                <h2>BPM Detection</h2>
+                <p class="description">Analyze audio files and detect beats per minute</p>
+                
+                <form id="bpm-form" class="form">
+                    <div class="form-group">
+                        <label for="bpm-target">File or Folder Path</label>
+                        <input type="text" id="bpm-target" placeholder="~/Music/song.mp3 or ~/Music/" required>
+                    </div>
+                    
+                    <div class="form-group checkbox-group">
+                        <label>
+                            <input type="checkbox" id="bpm-advanced" checked>
+                            Use advanced detection (more accurate, slower)
+                        </label>
+                        <label>
+                            <input type="checkbox" id="bpm-parallel">
+                            Use parallel processing (for folders)
+                        </label>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-primary">
+                        <span class="btn-text">Detect BPM</span>
+                        <span class="btn-loader" style="display: none;">🎵 Analyzing...</span>
+                    </button>
+                </form>
+                
+                <div id="bpm-result" class="result"></div>
+            </div>
+        </div>
+
+        <!-- Config Tab -->
+        <div id="config" class="tab-content">
+            <div class="card">
+                <h2>Configuration</h2>
+                <p class="description">Current CloudBuccaneer settings</p>
+                
+                <button id="load-config-btn" class="btn btn-secondary">Load Configuration</button>
+                
+                <div id="config-display" class="result"></div>
+            </div>
+        </div>
+
+        <footer>
+            <p>CloudBuccaneer v0.1.0 | For personal use only | Respect copyright laws</p>
+        </footer>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+</body>
+</html>

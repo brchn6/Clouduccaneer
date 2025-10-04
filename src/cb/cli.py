@@ -710,5 +710,20 @@ def bpm(
         raise typer.Exit(code=1)
 
 
+@app.command()
+def web(
+    host: str = typer.Option("127.0.0.1", "--host", help="Host to bind to"),
+    port: int = typer.Option(8080, "--port", help="Port to bind to"),
+):
+    """Start the web UI server."""
+    from .web.app import run_server
+    
+    print(f"🌐 Starting CloudBuccaneer Web UI...")
+    print(f"   Server: http://{host}:{port}")
+    print(f"   Press Ctrl+C to stop")
+    
+    run_server(host=host, port=port)
+
+
 if __name__ == "__main__":
     app()
